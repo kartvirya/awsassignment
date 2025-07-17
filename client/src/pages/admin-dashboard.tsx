@@ -15,7 +15,7 @@ export default function AdminDashboard() {
   const renderContent = () => {
     switch (activeView) {
       case "overview":
-        return <AdminOverview />;
+        return <AdminOverview setActiveView={setActiveView} />;
       case "users":
         return <AdminUsers />;
       case "sessions":

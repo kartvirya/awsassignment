@@ -14,7 +14,11 @@ import {
 } from "lucide-react";
 import { format } from "date-fns";
 
-export default function StudentOverview() {
+interface StudentOverviewProps {
+  setActiveView?: (view: string) => void;
+}
+
+export default function StudentOverview({ setActiveView }: StudentOverviewProps) {
   const { data: sessions, isLoading: sessionsLoading } = useQuery({
     queryKey: ["/api/sessions/student"],
   });
@@ -153,7 +157,11 @@ export default function StudentOverview() {
               <div className="text-center py-8 text-neutral-500">
                 <Calendar className="h-12 w-12 mx-auto mb-4 text-neutral-300" />
                 <p>No upcoming sessions scheduled</p>
-                <Button className="mt-4" size="sm">
+                <Button 
+                  className="mt-4" 
+                  size="sm"
+                  onClick={() => setActiveView?.("sessions")}
+                >
                   Book a Session
                 </Button>
               </div>
@@ -193,7 +201,11 @@ export default function StudentOverview() {
               <div className="text-center py-8 text-neutral-500">
                 <BookOpen className="h-12 w-12 mx-auto mb-4 text-neutral-300" />
                 <p>No resources accessed yet</p>
-                <Button className="mt-4" size="sm">
+                <Button 
+                  className="mt-4" 
+                  size="sm"
+                  onClick={() => setActiveView?.("resources")}
+                >
                   Explore Resources
                 </Button>
               </div>
@@ -230,15 +242,26 @@ export default function StudentOverview() {
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <Button className="flex items-center justify-center py-6">
+            <Button 
+              className="flex items-center justify-center py-6"
+              onClick={() => setActiveView?.("sessions")}
+            >
               <Calendar className="h-5 w-5 mr-2" />
               Book Session
             </Button>
-            <Button variant="outline" className="flex items-center justify-center py-6">
+            <Button 
+              variant="outline" 
+              className="flex items-center justify-center py-6"
+              onClick={() => setActiveView?.("resources")}
+            >
               <BookOpen className="h-5 w-5 mr-2" />
               Browse Resources
             </Button>
-            <Button variant="outline" className="flex items-center justify-center py-6">
+            <Button 
+              variant="outline" 
+              className="flex items-center justify-center py-6"
+              onClick={() => setActiveView?.("messages")}
+            >
               <MessageSquare className="h-5 w-5 mr-2" />
               Send Message
             </Button>

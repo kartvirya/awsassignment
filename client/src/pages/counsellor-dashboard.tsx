@@ -15,7 +15,7 @@ export default function CounsellorDashboard() {
   const renderContent = () => {
     switch (activeView) {
       case "overview":
-        return <CounsellorOverview />;
+        return <CounsellorOverview setActiveView={setActiveView} />;
       case "sessions":
         return <CounsellorSessions />;
       case "students":

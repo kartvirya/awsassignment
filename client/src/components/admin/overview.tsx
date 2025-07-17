@@ -15,7 +15,11 @@ import {
   BarChart3
 } from "lucide-react";
 
-export default function AdminOverview() {
+interface AdminOverviewProps {
+  setActiveView?: (view: string) => void;
+}
+
+export default function AdminOverview({ setActiveView }: AdminOverviewProps) {
   const { data: users, isLoading: usersLoading } = useQuery({
     queryKey: ["/api/users"],
   });
@@ -313,23 +317,42 @@ export default function AdminOverview() {
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
-            <Button className="flex items-center justify-center py-6">
+            <Button 
+              className="flex items-center justify-center py-6"
+              onClick={() => setActiveView?.("users")}
+            >
               <UserPlus className="h-5 w-5 mr-2" />
               Add User
             </Button>
-            <Button variant="outline" className="flex items-center justify-center py-6">
+            <Button 
+              variant="outline" 
+              className="flex items-center justify-center py-6"
+              onClick={() => setActiveView?.("resources")}
+            >
               <BookOpen className="h-5 w-5 mr-2" />
               Manage Resources
             </Button>
-            <Button variant="outline" className="flex items-center justify-center py-6">
+            <Button 
+              variant="outline" 
+              className="flex items-center justify-center py-6"
+              onClick={() => setActiveView?.("sessions")}
+            >
               <Calendar className="h-5 w-5 mr-2" />
               View Sessions
             </Button>
-            <Button variant="outline" className="flex items-center justify-center py-6">
+            <Button 
+              variant="outline" 
+              className="flex items-center justify-center py-6"
+              onClick={() => setActiveView?.("users")}
+            >
               <BarChart3 className="h-5 w-5 mr-2" />
               View Analytics
             </Button>
-            <Button variant="outline" className="flex items-center justify-center py-6">
+            <Button 
+              variant="outline" 
+              className="flex items-center justify-center py-6"
+              onClick={() => setActiveView?.("settings")}
+            >
               <ShieldAlert className="h-5 w-5 mr-2" />
               System Settings
             </Button>

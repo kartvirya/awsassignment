@@ -15,7 +15,11 @@ import {
 } from "lucide-react";
 import { format } from "date-fns";
 
-export default function CounsellorOverview() {
+interface CounsellorOverviewProps {
+  setActiveView?: (view: string) => void;
+}
+
+export default function CounsellorOverview({ setActiveView }: CounsellorOverviewProps) {
   const { data: sessions, isLoading: sessionsLoading } = useQuery({
     queryKey: ["/api/sessions/counsellor"],
   });
@@ -218,19 +222,34 @@ export default function CounsellorOverview() {
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <Button className="flex items-center justify-center py-6">
+            <Button 
+              className="flex items-center justify-center py-6"
+              onClick={() => setActiveView?.("resources")}
+            >
               <Plus className="h-5 w-5 mr-2" />
               Add Resource
             </Button>
-            <Button variant="outline" className="flex items-center justify-center py-6">
+            <Button 
+              variant="outline" 
+              className="flex items-center justify-center py-6"
+              onClick={() => setActiveView?.("messages")}
+            >
               <MessageSquare className="h-5 w-5 mr-2" />
               Check Messages
             </Button>
-            <Button variant="outline" className="flex items-center justify-center py-6">
+            <Button 
+              variant="outline" 
+              className="flex items-center justify-center py-6"
+              onClick={() => setActiveView?.("students")}
+            >
               <Users className="h-5 w-5 mr-2" />
               View Students
             </Button>
-            <Button variant="outline" className="flex items-center justify-center py-6">
+            <Button 
+              variant="outline" 
+              className="flex items-center justify-center py-6"
+              onClick={() => setActiveView?.("sessions")}
+            >
               <Calendar className="h-5 w-5 mr-2" />
               Manage Sessions
             </Button>

@@ -15,7 +15,7 @@ export default function StudentDashboard() {
   const renderContent = () => {
     switch (activeView) {
       case "overview":
-        return <StudentOverview />;
+        return <StudentOverview setActiveView={setActiveView} />;
       case "resources":
         return <StudentResources />;
       case "sessions":
