@@ -1,224 +1,242 @@
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Button } from "@/components/ui/button";
 import { 
-  Users, 
   Calendar, 
-  Clock, 
-  TrendingUp,
-  User,
+  Users, 
+  BookOpen, 
+  MessageSquare, 
+  TrendingUp, 
+  Clock,
   CheckCircle,
-  XCircle
+  AlertCircle,
+  Plus
 } from "lucide-react";
+import { format } from "date-fns";
 
 export default function CounsellorOverview() {
-  const { data: sessions = [] } = useQuery({
+  const { data: sessions, isLoading: sessionsLoading } = useQuery({
     queryKey: ["/api/sessions/counsellor"],
   });
 
-  const { data: pendingSessions = [] } = useQuery({
+  const { data: pendingSessions, isLoading: pendingLoading } = useQuery({
     queryKey: ["/api/sessions/pending"],
   });
 
-  const { data: students = [] } = useQuery({
+  const { data: students, isLoading: studentsLoading } = useQuery({
     queryKey: ["/api/users/role/student"],
   });
 
-  const today = new Date().toDateString();
-  const todaySessions = sessions.filter((session: any) => 
-    new Date(session.scheduledAt).toDateString() === today
-  );
-
-  const thisWeekSessions = sessions.filter((session: any) => {
-    const sessionDate = new Date(session.scheduledAt);
-    const now = new Date();
-    const weekStart = new Date(now.setDate(now.getDate() - now.getDay()));
-    return sessionDate >= weekStart;
+  const { data: resources, isLoading: resourcesLoading } = useQuery({
+    queryKey: ["/api/resources"],
   });
 
-  const completedSessions = sessions.filter((session: any) => 
-    session.status === "completed"
-  );
+  const { data: conversations, isLoading: conversationsLoading } = useQuery({
+    queryKey: ["/api/messages/conversations"],
+  });
 
-  const successRate = sessions.length > 0 
-    ? Math.round((completedSessions.length / sessions.length) * 100)
-    : 0;
+  const upcomingSessions = sessions?.filter(
+    (session: any) => 
+      session.status === "confirmed" && 
+      new Date(session.scheduledAt) > new Date()
+  ).slice(0, 3) || [];
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case "confirmed":
-        return "bg-primary";
-      case "pending":
-        return "bg-yellow-500";
-      case "completed":
-        return "bg-green-500";
-      default:
-        return "bg-neutral-400";
-    }
-  };
+  const completedSessions = sessions?.filter((s: any) => s.status === "completed").length || 0;
+  const totalSessions = sessions?.length || 0;
+  const activeStudents = students?.filter((s: any) => 
+    sessions?.some((session: any) => session.studentId === s.id)
+  ).length || 0;
+  const unreadMessages = conversations?.filter(
+    (msg: any) => msg.status === "sent" && msg.senderId !== msg.userId
+  ).length || 0;
+
+  if (sessionsLoading || pendingLoading || studentsLoading || resourcesLoading || conversationsLoading) {
+    return (
+      <div className="p-6 space-y-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          {[...Array(4)].map((_, i) => (
+            <Card key={i} className="animate-pulse">
+              <CardHeader className="pb-3">
+                <div className="h-4 bg-neutral-200 rounded w-3/4"></div>
+              </CardHeader>
+              <CardContent>
+                <div className="h-8 bg-neutral-200 rounded w-1/2"></div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="p-6">
+    <div className="p-6 space-y-6">
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-neutral-800 mb-2">
-          Counsellor Dashboard
-        </h1>
-        <p className="text-neutral-600">Manage your appointments and student progress</p>
+        <h1 className="text-2xl font-bold text-neutral-900">Counsellor Dashboard</h1>
+        <p className="text-neutral-600">Monitor your sessions and student progress</p>
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-        <Card className="border-neutral-200">
-          <CardContent className="p-6">
-            <div className="flex items-center">
-              <div className="p-3 bg-primary bg-opacity-10 rounded-full">
-                <Users className="h-6 w-6 text-primary" />
-              </div>
-              <div className="ml-4">
-                <p className="text-sm font-medium text-neutral-600">Active Students</p>
-                <p className="text-2xl font-bold text-neutral-900">{students.length}</p>
-              </div>
-            </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm font-medium text-neutral-600 flex items-center">
+              <Calendar className="h-4 w-4 mr-2" />
+              Upcoming Sessions
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-primary">{upcomingSessions.length}</div>
+            <p className="text-sm text-neutral-500">Next 7 days</p>
           </CardContent>
         </Card>
 
-        <Card className="border-neutral-200">
-          <CardContent className="p-6">
-            <div className="flex items-center">
-              <div className="p-3 bg-secondary bg-opacity-10 rounded-full">
-                <Calendar className="h-6 w-6 text-secondary" />
-              </div>
-              <div className="ml-4">
-                <p className="text-sm font-medium text-neutral-600">Sessions This Week</p>
-                <p className="text-2xl font-bold text-neutral-900">{thisWeekSessions.length}</p>
-              </div>
-            </div>
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm font-medium text-neutral-600 flex items-center">
+              <Users className="h-4 w-4 mr-2" />
+              Active Students
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-green-600">{activeStudents}</div>
+            <p className="text-sm text-neutral-500">Currently helping</p>
           </CardContent>
         </Card>
 
-        <Card className="border-neutral-200">
-          <CardContent className="p-6">
-            <div className="flex items-center">
-              <div className="p-3 bg-accent bg-opacity-10 rounded-full">
-                <Clock className="h-6 w-6 text-accent" />
-              </div>
-              <div className="ml-4">
-                <p className="text-sm font-medium text-neutral-600">Pending Requests</p>
-                <p className="text-2xl font-bold text-neutral-900">{pendingSessions.length}</p>
-              </div>
-            </div>
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm font-medium text-neutral-600 flex items-center">
+              <MessageSquare className="h-4 w-4 mr-2" />
+              Pending Messages
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-blue-600">{unreadMessages}</div>
+            <p className="text-sm text-neutral-500">Unread messages</p>
           </CardContent>
         </Card>
 
-        <Card className="border-neutral-200">
-          <CardContent className="p-6">
-            <div className="flex items-center">
-              <div className="p-3 bg-green-500 bg-opacity-10 rounded-full">
-                <TrendingUp className="h-6 w-6 text-green-500" />
-              </div>
-              <div className="ml-4">
-                <p className="text-sm font-medium text-neutral-600">Success Rate</p>
-                <p className="text-2xl font-bold text-neutral-900">{successRate}%</p>
-              </div>
-            </div>
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm font-medium text-neutral-600 flex items-center">
+              <TrendingUp className="h-4 w-4 mr-2" />
+              Completed Sessions
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-purple-600">{completedSessions}</div>
+            <p className="text-sm text-neutral-500">This month</p>
           </CardContent>
         </Card>
       </div>
 
-      {/* Today's Schedule & Pending Requests */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Today's Schedule */}
-        <Card className="border-neutral-200">
+        {/* Upcoming Sessions */}
+        <Card>
           <CardHeader>
-            <CardTitle className="text-lg">Today's Schedule</CardTitle>
+            <CardTitle className="flex items-center">
+              <Calendar className="h-5 w-5 mr-2" />
+              Upcoming Sessions
+            </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="space-y-4">
-              {todaySessions.length > 0 ? (
-                todaySessions.map((session: any) => (
+            {upcomingSessions.length === 0 ? (
+              <div className="text-center py-8 text-neutral-500">
+                <Calendar className="h-12 w-12 mx-auto mb-4 text-neutral-300" />
+                <p>No upcoming sessions scheduled</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {upcomingSessions.map((session: any) => (
                   <div key={session.id} className="flex items-center justify-between p-3 bg-neutral-50 rounded-lg">
-                    <div className="flex items-center">
-                      <div className={`w-3 h-3 rounded-full mr-3 ${getStatusColor(session.status)}`}></div>
-                      <div>
-                        <p className="text-sm font-medium text-neutral-800">
-                          {session.type.charAt(0).toUpperCase() + session.type.slice(1)} Session
-                        </p>
-                        <p className="text-xs text-neutral-600">
-                          {new Date(session.scheduledAt).toLocaleTimeString()}
-                        </p>
+                    <div>
+                      <div className="font-medium text-neutral-900">
+                        Student #{session.studentId}
+                      </div>
+                      <div className="text-sm text-neutral-600 flex items-center">
+                        <Clock className="h-4 w-4 mr-1" />
+                        {format(new Date(session.scheduledAt), "PPp")}
                       </div>
                     </div>
-                    <Button variant="ghost" size="sm" className="text-primary">
-                      View
-                    </Button>
+                    <Badge variant="outline" className="text-green-600 border-green-600">
+                      {session.type}
+                    </Badge>
                   </div>
-                ))
-              ) : (
-                <div className="text-center py-8 text-neutral-500">
-                  <Calendar className="h-12 w-12 mx-auto mb-4 text-neutral-300" />
-                  <p>No sessions scheduled for today</p>
-                </div>
-              )}
-            </div>
+                ))}
+              </div>
+            )}
           </CardContent>
         </Card>
 
-        {/* Pending Requests */}
-        <Card className="border-neutral-200">
+        {/* Pending Session Requests */}
+        <Card>
           <CardHeader>
-            <CardTitle className="text-lg">Pending Requests</CardTitle>
+            <CardTitle className="flex items-center">
+              <AlertCircle className="h-5 w-5 mr-2" />
+              Pending Requests
+            </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="space-y-4">
-              {pendingSessions.length > 0 ? (
-                pendingSessions.map((session: any) => (
-                  <div key={session.id} className="flex items-center justify-between p-3 bg-neutral-50 rounded-lg">
-                    <div className="flex items-center">
-                      <Avatar className="h-8 w-8">
-                        <AvatarFallback className="bg-primary text-white">
-                          <User className="h-4 w-4" />
-                        </AvatarFallback>
-                      </Avatar>
-                      <div className="ml-3">
-                        <p className="text-sm font-medium text-neutral-800">
-                          {session.type.charAt(0).toUpperCase() + session.type.slice(1)} Session
-                        </p>
-                        <p className="text-xs text-neutral-600">
-                          {new Date(session.scheduledAt).toLocaleDateString()} at{" "}
-                          {new Date(session.scheduledAt).toLocaleTimeString()}
-                        </p>
+            {pendingSessions?.length === 0 ? (
+              <div className="text-center py-8 text-neutral-500">
+                <CheckCircle className="h-12 w-12 mx-auto mb-4 text-neutral-300" />
+                <p>No pending session requests</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {pendingSessions?.slice(0, 3).map((session: any) => (
+                  <div key={session.id} className="flex items-center justify-between p-3 bg-yellow-50 rounded-lg">
+                    <div>
+                      <div className="font-medium text-neutral-900">
+                        Student #{session.studentId}
+                      </div>
+                      <div className="text-sm text-neutral-600 flex items-center">
+                        <Clock className="h-4 w-4 mr-1" />
+                        {format(new Date(session.scheduledAt), "PPp")}
                       </div>
                     </div>
-                    <div className="flex space-x-2">
-                      <Button 
-                        variant="ghost" 
-                        size="sm" 
-                        className="text-green-600 hover:text-green-800"
-                      >
-                        <CheckCircle className="h-4 w-4" />
-                      </Button>
-                      <Button 
-                        variant="ghost" 
-                        size="sm" 
-                        className="text-red-600 hover:text-red-800"
-                      >
-                        <XCircle className="h-4 w-4" />
+                    <div className="flex gap-2">
+                      <Button size="sm" variant="outline">
+                        <CheckCircle className="h-4 w-4 mr-1" />
+                        Accept
                       </Button>
                     </div>
                   </div>
-                ))
-              ) : (
-                <div className="text-center py-8 text-neutral-500">
-                  <Clock className="h-12 w-12 mx-auto mb-4 text-neutral-300" />
-                  <p>No pending requests</p>
-                </div>
-              )}
-            </div>
+                ))}
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>
+
+      {/* Quick Actions */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Quick Actions</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <Button className="flex items-center justify-center py-6">
+              <Plus className="h-5 w-5 mr-2" />
+              Add Resource
+            </Button>
+            <Button variant="outline" className="flex items-center justify-center py-6">
+              <MessageSquare className="h-5 w-5 mr-2" />
+              Check Messages
+            </Button>
+            <Button variant="outline" className="flex items-center justify-center py-6">
+              <Users className="h-5 w-5 mr-2" />
+              View Students
+            </Button>
+            <Button variant="outline" className="flex items-center justify-center py-6">
+              <Calendar className="h-5 w-5 mr-2" />
+              Manage Sessions
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }

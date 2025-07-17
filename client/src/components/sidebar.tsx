@@ -1,4 +1,5 @@
 import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
 import { 
   Home, 
   BookOpen, 
@@ -6,13 +7,9 @@ import {
   MessageSquare, 
   User, 
   Users, 
-  CalendarCheck,
-  Folder,
-  TrendingUp,
-  UserCog,
-  ClipboardList,
-  Database,
-  Settings
+  Settings,
+  BarChart3,
+  FileText
 } from "lucide-react";
 
 interface SidebarProps {
@@ -21,71 +18,61 @@ interface SidebarProps {
   setActiveView: (view: string) => void;
 }
 
-export default function Sidebar({ role, activeView, setActiveView }: SidebarProps) {
-  const getNavigationItems = () => {
-    switch (role) {
-      case "student":
-        return [
-          { id: "overview", icon: Home, label: "Overview" },
-          { id: "resources", icon: BookOpen, label: "CBT Resources" },
-          { id: "sessions", icon: Calendar, label: "My Sessions" },
-          { id: "messages", icon: MessageSquare, label: "Messages" },
-          { id: "profile", icon: User, label: "Profile" },
-        ];
-      case "counsellor":
-        return [
-          { id: "overview", icon: Home, label: "Overview" },
-          { id: "sessions", icon: CalendarCheck, label: "Appointments" },
-          { id: "students", icon: Users, label: "My Students" },
-          { id: "resources", icon: Folder, label: "Resources" },
-          { id: "messages", icon: MessageSquare, label: "Messages" },
-        ];
-      case "admin":
-        return [
-          { id: "overview", icon: TrendingUp, label: "Analytics" },
-          { id: "users", icon: UserCog, label: "User Management" },
-          { id: "sessions", icon: ClipboardList, label: "Sessions" },
-          { id: "resources", icon: Database, label: "Resources" },
-          { id: "settings", icon: Settings, label: "Settings" },
-        ];
-      default:
-        return [];
-    }
-  };
+const sidebarItems = {
+  student: [
+    { id: "overview", label: "Overview", icon: Home },
+    { id: "resources", label: "Resources", icon: BookOpen },
+    { id: "sessions", label: "Sessions", icon: Calendar },
+    { id: "messages", label: "Messages", icon: MessageSquare },
+    { id: "profile", label: "Profile", icon: User },
+  ],
+  counsellor: [
+    { id: "overview", label: "Overview", icon: Home },
+    { id: "sessions", label: "Sessions", icon: Calendar },
+    { id: "students", label: "Students", icon: Users },
+    { id: "resources", label: "Resources", icon: BookOpen },
+    { id: "messages", label: "Messages", icon: MessageSquare },
+  ],
+  admin: [
+    { id: "overview", label: "Overview", icon: Home },
+    { id: "users", label: "Users", icon: Users },
+    { id: "sessions", label: "Sessions", icon: Calendar },
+    { id: "resources", label: "Resources", icon: BookOpen },
+    { id: "settings", label: "Settings", icon: Settings },
+  ],
+};
 
-  const navigationItems = getNavigationItems();
-  const roleLabels = {
-    student: "Student Dashboard",
-    counsellor: "Counsellor Dashboard",
-    admin: "Admin Dashboard"
-  };
+export default function Sidebar({ role, activeView, setActiveView }: SidebarProps) {
+  const items = sidebarItems[role];
 
   return (
-    <nav className="w-64 bg-white shadow-lg border-r border-neutral-200 flex-shrink-0">
-      <div className="px-6 py-6">
-        <div className="mb-6">
-          <h2 className="text-lg font-semibold text-neutral-800 mb-4">
-            {roleLabels[role]}
-          </h2>
-          <div className="space-y-2">
-            {navigationItems.map(({ id, icon: Icon, label }) => (
-              <button
-                key={id}
-                onClick={() => setActiveView(id)}
+    <div className="w-64 bg-white border-r border-neutral-200 min-h-screen">
+      <div className="p-4">
+        <h2 className="text-lg font-semibold text-neutral-900 mb-4 capitalize">
+          {role} Dashboard
+        </h2>
+        <nav className="space-y-2">
+          {items.map((item) => {
+            const Icon = item.icon;
+            return (
+              <Button
+                key={item.id}
+                variant={activeView === item.id ? "default" : "ghost"}
                 className={cn(
-                  "w-full flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors cursor-pointer",
-                  activeView === id
-                    ? "bg-primary bg-opacity-10 text-primary"
-                    : "text-neutral-700 hover:bg-neutral-100 hover:text-neutral-900"
+                  "w-full justify-start",
+                  activeView === item.id
+                    ? "bg-primary text-primary-foreground"
+                    : "text-neutral-700 hover:text-neutral-900 hover:bg-neutral-100"
                 )}
+                onClick={() => setActiveView(item.id)}
               >
-                <Icon className="h-5 w-5 mr-3" />
-                {label}
-              </button>
-            ))}
-          </div>
-        </div>
+                <Icon className="mr-2 h-4 w-4" />
+                {item.label}
+              </Button>
+            );
+          })}
+        </nav>
       </div>
-    </nav>
+    </div>
   );
 }

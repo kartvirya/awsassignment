@@ -1,100 +1,105 @@
 import { useState } from "react";
-import { useQuery, useMutation } from "@tanstack/react-query";
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { z } from "zod";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { useToast } from "@/hooks/use-toast";
-import { queryClient } from "@/lib/queryClient";
-import { apiRequest } from "@/lib/queryClient";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { 
-  FileText, 
-  Play, 
-  Headphones, 
-  BookOpen,
-  Plus,
-  Edit,
-  Trash2,
-  Search
+  BookOpen, 
+  Plus, 
+  Edit, 
+  Trash2, 
+  Search, 
+  Filter,
+  FileText,
+  Video,
+  Headphones,
+  Download,
+  Eye,
+  Users
 } from "lucide-react";
+import { apiRequest } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
 
-const resourceSchema = z.object({
-  title: z.string().min(1, "Title is required"),
-  description: z.string().optional(),
-  type: z.enum(["worksheet", "video", "audio", "interactive"]),
-  fileUrl: z.string().optional(),
-  duration: z.number().min(1).optional(),
-});
+const typeIcons = {
+  worksheet: FileText,
+  video: Video,
+  audio: Headphones,
+  interactive: BookOpen,
+};
+
+const typeColors = {
+  worksheet: "bg-blue-100 text-blue-800",
+  video: "bg-red-100 text-red-800",
+  audio: "bg-purple-100 text-purple-800",
+  interactive: "bg-green-100 text-green-800",
+};
 
 export default function CounsellorResources() {
-  const { toast } = useToast();
-  const [selectedType, setSelectedType] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
-  const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [editingResource, setEditingResource] = useState<any>(null);
+  const [typeFilter, setTypeFilter] = useState("all");
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [selectedResource, setSelectedResource] = useState<any>(null);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
 
-  const { data: resources = [], isLoading } = useQuery({
-    queryKey: selectedType ? ["/api/resources", { type: selectedType }] : ["/api/resources"],
+  const { data: resources, isLoading: resourcesLoading } = useQuery({
+    queryKey: ["/api/resources"],
   });
 
-  const form = useForm<z.infer<typeof resourceSchema>>({
-    resolver: zodResolver(resourceSchema),
-    defaultValues: {
-      title: "",
-      description: "",
-      type: "worksheet",
-      fileUrl: "",
-      duration: undefined,
-    },
+  const { data: resourceStats, isLoading: statsLoading } = useQuery({
+    queryKey: ["/api/resources/stats"],
   });
 
   const createResourceMutation = useMutation({
-    mutationFn: async (data: z.infer<typeof resourceSchema>) => {
-      await apiRequest("POST", "/api/resources", data);
+    mutationFn: async (resourceData: any) => {
+      return apiRequest("/api/resources", {
+        method: "POST",
+        body: resourceData,
+      });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/resources"] });
+      setIsCreateModalOpen(false);
       toast({
-        title: "Success",
-        description: "Resource created successfully",
+        title: "Resource Created",
+        description: "New resource has been created successfully.",
       });
-      setIsDialogOpen(false);
-      form.reset();
     },
     onError: (error) => {
       toast({
         title: "Error",
-        description: error.message,
+        description: "Failed to create resource. Please try again.",
         variant: "destructive",
       });
     },
   });
 
   const updateResourceMutation = useMutation({
-    mutationFn: async ({ id, data }: { id: number; data: Partial<z.infer<typeof resourceSchema>> }) => {
-      await apiRequest("PATCH", `/api/resources/${id}`, data);
+    mutationFn: async ({ id, ...resourceData }: any) => {
+      return apiRequest(`/api/resources/${id}`, {
+        method: "PATCH",
+        body: resourceData,
+      });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/resources"] });
+      setIsEditModalOpen(false);
+      setSelectedResource(null);
       toast({
-        title: "Success",
-        description: "Resource updated successfully",
+        title: "Resource Updated",
+        description: "Resource has been updated successfully.",
       });
-      setIsDialogOpen(false);
-      setEditingResource(null);
-      form.reset();
     },
     onError: (error) => {
       toast({
         title: "Error",
-        description: error.message,
+        description: "Failed to update resource. Please try again.",
         variant: "destructive",
       });
     },
@@ -102,248 +107,171 @@ export default function CounsellorResources() {
 
   const deleteResourceMutation = useMutation({
     mutationFn: async (id: number) => {
-      await apiRequest("DELETE", `/api/resources/${id}`);
+      return apiRequest(`/api/resources/${id}`, {
+        method: "DELETE",
+      });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/resources"] });
       toast({
-        title: "Success",
-        description: "Resource deleted successfully",
+        title: "Resource Deleted",
+        description: "Resource has been deleted successfully.",
       });
     },
     onError: (error) => {
       toast({
         title: "Error",
-        description: error.message,
+        description: "Failed to delete resource. Please try again.",
         variant: "destructive",
       });
     },
   });
 
-  const resourceTypes = [
-    { id: null, label: "All Resources", icon: BookOpen },
-    { id: "worksheet", label: "Worksheets", icon: FileText },
-    { id: "video", label: "Videos", icon: Play },
-    { id: "audio", label: "Audio", icon: Headphones },
-    { id: "interactive", label: "Interactive", icon: BookOpen },
-  ];
+  const filteredResources = resources?.filter((resource: any) => {
+    const matchesSearch = resource.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         resource.description.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesType = typeFilter === "all" || resource.type === typeFilter;
+    return matchesSearch && matchesType;
+  }) || [];
 
-  const getResourceIcon = (type: string) => {
-    switch (type) {
-      case "video":
-        return <Play className="h-6 w-6 text-secondary" />;
-      case "worksheet":
-        return <FileText className="h-6 w-6 text-primary" />;
-      case "audio":
-        return <Headphones className="h-6 w-6 text-accent" />;
-      case "interactive":
-        return <BookOpen className="h-6 w-6 text-purple-500" />;
-      default:
-        return <FileText className="h-6 w-6 text-neutral-500" />;
-    }
+  const handleCreateResource = (resourceData: any) => {
+    createResourceMutation.mutate(resourceData);
   };
 
-  const getResourceBadgeColor = (type: string) => {
-    switch (type) {
-      case "video":
-        return "bg-secondary/10 text-secondary";
-      case "worksheet":
-        return "bg-primary/10 text-primary";
-      case "audio":
-        return "bg-accent/10 text-accent";
-      case "interactive":
-        return "bg-purple-500/10 text-purple-500";
-      default:
-        return "bg-neutral-100 text-neutral-600";
-    }
+  const handleUpdateResource = (resourceData: any) => {
+    updateResourceMutation.mutate({ id: selectedResource.id, ...resourceData });
   };
 
-  const filteredResources = resources.filter((resource: any) =>
-    resource.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    resource.description?.toLowerCase().includes(searchTerm.toLowerCase())
-  );
-
-  const onSubmit = (data: z.infer<typeof resourceSchema>) => {
-    if (editingResource) {
-      updateResourceMutation.mutate({ id: editingResource.id, data });
-    } else {
-      createResourceMutation.mutate(data);
-    }
-  };
-
-  const handleEdit = (resource: any) => {
-    setEditingResource(resource);
-    form.reset({
-      title: resource.title,
-      description: resource.description || "",
-      type: resource.type,
-      fileUrl: resource.fileUrl || "",
-      duration: resource.duration || undefined,
-    });
-    setIsDialogOpen(true);
-  };
-
-  const handleDelete = (id: number) => {
-    if (confirm("Are you sure you want to delete this resource?")) {
+  const handleDeleteResource = (id: number) => {
+    if (window.confirm("Are you sure you want to delete this resource?")) {
       deleteResourceMutation.mutate(id);
     }
   };
 
-  if (isLoading) {
+  const resourceCounts = {
+    total: resources?.length || 0,
+    worksheet: resources?.filter((r: any) => r.type === "worksheet").length || 0,
+    video: resources?.filter((r: any) => r.type === "video").length || 0,
+    audio: resources?.filter((r: any) => r.type === "audio").length || 0,
+    interactive: resources?.filter((r: any) => r.type === "interactive").length || 0,
+  };
+
+  if (resourcesLoading || statsLoading) {
     return (
-      <div className="p-6">
-        <div className="animate-pulse">
-          <div className="h-8 bg-neutral-200 rounded w-1/4 mb-4"></div>
-          <div className="h-4 bg-neutral-200 rounded w-1/2 mb-8"></div>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {[1, 2, 3, 4, 5, 6].map((i) => (
-              <div key={i} className="h-48 bg-neutral-200 rounded-lg"></div>
-            ))}
-          </div>
+      <div className="p-6 space-y-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          {[...Array(4)].map((_, i) => (
+            <Card key={i} className="animate-pulse">
+              <CardHeader className="pb-3">
+                <div className="h-4 bg-neutral-200 rounded w-3/4"></div>
+              </CardHeader>
+              <CardContent>
+                <div className="h-8 bg-neutral-200 rounded w-1/2"></div>
+              </CardContent>
+            </Card>
+          ))}
         </div>
       </div>
     );
   }
 
   return (
-    <div className="p-6">
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-neutral-800 mb-2">Resources</h1>
-        <p className="text-neutral-600">Manage CBT resources and materials</p>
-      </div>
-
-      {/* Actions */}
-      <div className="flex flex-col sm:flex-row gap-4 mb-6">
-        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+    <div className="p-6 space-y-6">
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <h1 className="text-2xl font-bold text-neutral-900">Resource Management</h1>
+          <p className="text-neutral-600">Create and manage educational resources</p>
+        </div>
+        <Dialog open={isCreateModalOpen} onOpenChange={setIsCreateModalOpen}>
           <DialogTrigger asChild>
-            <Button 
-              onClick={() => {
-                setEditingResource(null);
-                form.reset();
-              }}
-              className="bg-primary text-white hover:bg-primary/90"
-            >
+            <Button>
               <Plus className="h-4 w-4 mr-2" />
               Add Resource
             </Button>
           </DialogTrigger>
-          <DialogContent className="sm:max-w-[600px]">
+          <DialogContent className="sm:max-w-[500px]">
             <DialogHeader>
-              <DialogTitle>
-                {editingResource ? "Edit Resource" : "Add New Resource"}
-              </DialogTitle>
+              <DialogTitle>Create New Resource</DialogTitle>
             </DialogHeader>
-            <Form {...form}>
-              <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-                <FormField
-                  control={form.control}
-                  name="title"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Title</FormLabel>
-                      <FormControl>
-                        <Input placeholder="Resource title" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
-                  name="description"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Description</FormLabel>
-                      <FormControl>
-                        <Textarea placeholder="Resource description" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <div className="grid grid-cols-2 gap-4">
-                  <FormField
-                    control={form.control}
-                    name="type"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Type</FormLabel>
-                        <Select onValueChange={field.onChange} defaultValue={field.value}>
-                          <FormControl>
-                            <SelectTrigger>
-                              <SelectValue placeholder="Select type" />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            <SelectItem value="worksheet">Worksheet</SelectItem>
-                            <SelectItem value="video">Video</SelectItem>
-                            <SelectItem value="audio">Audio</SelectItem>
-                            <SelectItem value="interactive">Interactive</SelectItem>
-                          </SelectContent>
-                        </Select>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  <FormField
-                    control={form.control}
-                    name="duration"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Duration (minutes)</FormLabel>
-                        <FormControl>
-                          <Input 
-                            type="number" 
-                            placeholder="Duration" 
-                            {...field}
-                            onChange={(e) => field.onChange(e.target.value ? parseInt(e.target.value) : undefined)}
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </div>
-
-                <FormField
-                  control={form.control}
-                  name="fileUrl"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>File URL</FormLabel>
-                      <FormControl>
-                        <Input placeholder="https://example.com/file.pdf" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <div className="flex space-x-4">
-                  <Button 
-                    type="submit" 
-                    disabled={createResourceMutation.isPending || updateResourceMutation.isPending}
-                    className="bg-primary text-white hover:bg-primary/90"
-                  >
-                    {editingResource ? "Update Resource" : "Create Resource"}
-                  </Button>
-                  <Button 
-                    type="button" 
-                    variant="outline"
-                    onClick={() => setIsDialogOpen(false)}
-                  >
-                    Cancel
-                  </Button>
-                </div>
-              </form>
-            </Form>
+            <ResourceForm 
+              onSubmit={handleCreateResource}
+              isLoading={createResourceMutation.isPending}
+            />
           </DialogContent>
         </Dialog>
+      </div>
 
-        <div className="relative max-w-md">
+      {/* Resource Stats */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm font-medium text-neutral-600 flex items-center">
+              <BookOpen className="h-4 w-4 mr-2" />
+              Total Resources
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-primary">{resourceCounts.total}</div>
+            <p className="text-sm text-neutral-500">All resources</p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm font-medium text-neutral-600 flex items-center">
+              <FileText className="h-4 w-4 mr-2" />
+              Worksheets
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-blue-600">{resourceCounts.worksheet}</div>
+            <p className="text-sm text-neutral-500">PDF documents</p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm font-medium text-neutral-600 flex items-center">
+              <Video className="h-4 w-4 mr-2" />
+              Videos
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-red-600">{resourceCounts.video}</div>
+            <p className="text-sm text-neutral-500">Video content</p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm font-medium text-neutral-600 flex items-center">
+              <Headphones className="h-4 w-4 mr-2" />
+              Audio
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-purple-600">{resourceCounts.audio}</div>
+            <p className="text-sm text-neutral-500">Audio files</p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm font-medium text-neutral-600 flex items-center">
+              <Users className="h-4 w-4 mr-2" />
+              Interactive
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-green-600">{resourceCounts.interactive}</div>
+            <p className="text-sm text-neutral-500">Interactive tools</p>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Search and Filter */}
+      <div className="flex items-center gap-4 mb-6">
+        <div className="flex-1 relative">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-neutral-400" />
           <Input
             placeholder="Search resources..."
@@ -352,93 +280,232 @@ export default function CounsellorResources() {
             className="pl-10"
           />
         </div>
-      </div>
-
-      {/* Resource Categories */}
-      <div className="mb-6">
-        <div className="flex flex-wrap gap-3">
-          {resourceTypes.map(({ id, label, icon: Icon }) => (
-            <Button
-              key={id}
-              variant={selectedType === id ? "default" : "outline"}
-              className={`${
-                selectedType === id 
-                  ? "bg-primary text-white" 
-                  : "bg-neutral-100 text-neutral-700 hover:bg-neutral-200"
-              }`}
-              onClick={() => setSelectedType(id)}
-            >
-              <Icon className="h-4 w-4 mr-2" />
-              {label}
-            </Button>
-          ))}
+        <div className="flex items-center gap-2">
+          <Filter className="h-4 w-4 text-neutral-400" />
+          <Select value={typeFilter} onValueChange={setTypeFilter}>
+            <SelectTrigger className="w-32">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Types</SelectItem>
+              <SelectItem value="worksheet">Worksheets</SelectItem>
+              <SelectItem value="video">Videos</SelectItem>
+              <SelectItem value="audio">Audio</SelectItem>
+              <SelectItem value="interactive">Interactive</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
       </div>
 
-      {/* Resource Grid */}
+      {/* Resources Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {filteredResources.length > 0 ? (
-          filteredResources.map((resource: any) => (
-            <Card key={resource.id} className="border-neutral-200 hover:shadow-md transition-shadow">
-              <CardContent className="p-6">
-                <div className="flex items-center justify-between mb-4">
-                  <div className="p-3 bg-opacity-10 rounded-lg">
-                    {getResourceIcon(resource.type)}
-                  </div>
-                  <Badge className={getResourceBadgeColor(resource.type)}>
-                    {resource.type.charAt(0).toUpperCase() + resource.type.slice(1)}
+        {filteredResources.map((resource: any) => {
+          const IconComponent = typeIcons[resource.type as keyof typeof typeIcons];
+          return (
+            <Card key={resource.id} className="hover:shadow-lg transition-shadow">
+              <CardHeader className="pb-3">
+                <div className="flex items-center justify-between">
+                  <Badge className={typeColors[resource.type as keyof typeof typeColors]}>
+                    <IconComponent className="h-3 w-3 mr-1" />
+                    {resource.type}
                   </Badge>
+                  <div className="text-sm text-neutral-500">
+                    {resource.category || "General"}
+                  </div>
                 </div>
-                <h3 className="text-lg font-semibold text-neutral-800 mb-2">
-                  {resource.title}
-                </h3>
-                <p className="text-sm text-neutral-600 mb-4">
-                  {resource.description || "No description"}
-                </p>
-                <div className="flex items-center justify-between mb-4">
-                  <span className="text-xs text-neutral-500">
-                    {resource.type.charAt(0).toUpperCase() + resource.type.slice(1)}
-                    {resource.duration && ` • ${resource.duration} min`}
-                  </span>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div>
+                  <h3 className="font-medium text-neutral-900 mb-2">{resource.title}</h3>
+                  <p className="text-sm text-neutral-600 line-clamp-3">{resource.description}</p>
                 </div>
-                <div className="flex space-x-2">
-                  <Button 
-                    variant="outline"
+                
+                {resource.tags && (
+                  <div className="flex flex-wrap gap-1">
+                    {resource.tags.slice(0, 3).map((tag: string, index: number) => (
+                      <Badge key={index} variant="outline" className="text-xs">
+                        {tag}
+                      </Badge>
+                    ))}
+                    {resource.tags.length > 3 && (
+                      <Badge variant="outline" className="text-xs">
+                        +{resource.tags.length - 3} more
+                      </Badge>
+                    )}
+                  </div>
+                )}
+
+                <div className="flex items-center justify-between text-sm text-neutral-500">
+                  <div className="flex items-center">
+                    <Eye className="h-4 w-4 mr-1" />
+                    {resource.accessCount || 0} views
+                  </div>
+                  <div className="flex items-center">
+                    <Download className="h-4 w-4 mr-1" />
+                    {resource.downloadCount || 0} downloads
+                  </div>
+                </div>
+
+                <div className="flex gap-2">
+                  <Button
                     size="sm"
-                    onClick={() => handleEdit(resource)}
-                    className="flex-1 text-primary hover:bg-primary hover:text-white"
+                    variant="outline"
+                    onClick={() => {
+                      setSelectedResource(resource);
+                      setIsEditModalOpen(true);
+                    }}
                   >
-                    <Edit className="h-4 w-4 mr-1" />
+                    <Edit className="h-4 w-4 mr-2" />
                     Edit
                   </Button>
-                  <Button 
-                    variant="outline"
+                  <Button
                     size="sm"
-                    onClick={() => handleDelete(resource.id)}
-                    className="flex-1 text-red-600 hover:bg-red-600 hover:text-white"
+                    variant="outline"
+                    onClick={() => handleDeleteResource(resource.id)}
+                    disabled={deleteResourceMutation.isPending}
                   >
-                    <Trash2 className="h-4 w-4 mr-1" />
+                    <Trash2 className="h-4 w-4 mr-2" />
                     Delete
                   </Button>
                 </div>
               </CardContent>
             </Card>
-          ))
-        ) : (
-          <div className="col-span-full text-center py-12">
-            <BookOpen className="h-16 w-16 mx-auto mb-4 text-neutral-300" />
-            <h3 className="text-lg font-medium text-neutral-900 mb-2">
-              {searchTerm ? "No resources found" : "No resources yet"}
-            </h3>
-            <p className="text-neutral-600">
-              {searchTerm 
-                ? "Try adjusting your search terms."
-                : "Create your first resource to get started."
-              }
-            </p>
-          </div>
-        )}
+          );
+        })}
       </div>
+
+      {filteredResources.length === 0 && (
+        <div className="text-center py-12">
+          <BookOpen className="h-12 w-12 mx-auto mb-4 text-neutral-300" />
+          <p className="text-neutral-500 mb-4">No resources found</p>
+          <Button onClick={() => setIsCreateModalOpen(true)}>
+            <Plus className="h-4 w-4 mr-2" />
+            Create Your First Resource
+          </Button>
+        </div>
+      )}
+
+      {/* Edit Resource Modal */}
+      <Dialog open={isEditModalOpen} onOpenChange={setIsEditModalOpen}>
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle>Edit Resource</DialogTitle>
+          </DialogHeader>
+          <ResourceForm 
+            resource={selectedResource}
+            onSubmit={handleUpdateResource}
+            isLoading={updateResourceMutation.isPending}
+          />
+        </DialogContent>
+      </Dialog>
     </div>
+  );
+}
+
+function ResourceForm({ resource, onSubmit, isLoading }: any) {
+  const [formData, setFormData] = useState({
+    title: resource?.title || "",
+    description: resource?.description || "",
+    type: resource?.type || "worksheet",
+    category: resource?.category || "",
+    content: resource?.content || "",
+    fileUrl: resource?.fileUrl || "",
+    tags: resource?.tags?.join(", ") || "",
+  });
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const tagsArray = formData.tags.split(",").map(tag => tag.trim()).filter(tag => tag);
+    onSubmit({
+      ...formData,
+      tags: tagsArray,
+    });
+  };
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-4">
+      <div>
+        <Label htmlFor="title">Title</Label>
+        <Input
+          id="title"
+          value={formData.title}
+          onChange={(e) => setFormData({...formData, title: e.target.value})}
+          required
+        />
+      </div>
+
+      <div>
+        <Label htmlFor="description">Description</Label>
+        <Textarea
+          id="description"
+          value={formData.description}
+          onChange={(e) => setFormData({...formData, description: e.target.value})}
+          rows={3}
+          required
+        />
+      </div>
+
+      <div className="grid grid-cols-2 gap-4">
+        <div>
+          <Label htmlFor="type">Type</Label>
+          <Select value={formData.type} onValueChange={(value) => setFormData({...formData, type: value})}>
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="worksheet">Worksheet</SelectItem>
+              <SelectItem value="video">Video</SelectItem>
+              <SelectItem value="audio">Audio</SelectItem>
+              <SelectItem value="interactive">Interactive</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div>
+          <Label htmlFor="category">Category</Label>
+          <Input
+            id="category"
+            value={formData.category}
+            onChange={(e) => setFormData({...formData, category: e.target.value})}
+            placeholder="e.g., CBT, Anxiety, Depression"
+          />
+        </div>
+      </div>
+
+      <div>
+        <Label htmlFor="content">Content</Label>
+        <Textarea
+          id="content"
+          value={formData.content}
+          onChange={(e) => setFormData({...formData, content: e.target.value})}
+          rows={4}
+          placeholder="Resource content or instructions..."
+        />
+      </div>
+
+      <div>
+        <Label htmlFor="fileUrl">File URL (Optional)</Label>
+        <Input
+          id="fileUrl"
+          value={formData.fileUrl}
+          onChange={(e) => setFormData({...formData, fileUrl: e.target.value})}
+          placeholder="https://example.com/file.pdf"
+        />
+      </div>
+
+      <div>
+        <Label htmlFor="tags">Tags (comma-separated)</Label>
+        <Input
+          id="tags"
+          value={formData.tags}
+          onChange={(e) => setFormData({...formData, tags: e.target.value})}
+          placeholder="CBT, anxiety, mindfulness, coping"
+        />
+      </div>
+
+      <Button type="submit" disabled={isLoading} className="w-full">
+        {isLoading ? (resource ? "Updating..." : "Creating...") : (resource ? "Update Resource" : "Create Resource")}
+      </Button>
+    </form>
   );
 }

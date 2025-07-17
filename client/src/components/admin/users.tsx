@@ -1,311 +1,448 @@
 import { useState } from "react";
-import { useQuery, useMutation } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { useToast } from "@/hooks/use-toast";
-import { queryClient } from "@/lib/queryClient";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { 
+  Users, 
+  UserPlus, 
+  Search, 
+  Edit, 
+  Trash2,
+  Filter,
+  MoreHorizontal,
+  Mail,
+  Calendar,
+  ShieldAlert,
+  UserCheck
+} from "lucide-react";
+import { format } from "date-fns";
 import { apiRequest } from "@/lib/queryClient";
-import { User, Search, Plus, Edit, Ban } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
 
 export default function AdminUsers() {
-  const { toast } = useToast();
   const [searchTerm, setSearchTerm] = useState("");
-  const [roleFilter, setRoleFilter] = useState<string>("all");
+  const [roleFilter, setRoleFilter] = useState("all");
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [selectedUser, setSelectedUser] = useState<any>(null);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
 
-  const { data: users = [], isLoading } = useQuery({
+  const { data: users, isLoading: usersLoading } = useQuery({
     queryKey: ["/api/users"],
   });
 
-  const { data: sessions = [] } = useQuery({
-    queryKey: ["/api/sessions/all"],
-  });
-
-  const updateRoleMutation = useMutation({
-    mutationFn: async ({ userId, role }: { userId: string; role: string }) => {
-      await apiRequest("PATCH", `/api/users/${userId}/role`, { role });
+  const createUserMutation = useMutation({
+    mutationFn: async (userData: any) => {
+      return apiRequest("/api/users", {
+        method: "POST",
+        body: userData,
+      });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/users"] });
+      setIsCreateModalOpen(false);
       toast({
-        title: "Success",
-        description: "User role updated successfully",
+        title: "User Created",
+        description: "New user has been created successfully.",
       });
     },
     onError: (error) => {
       toast({
         title: "Error",
-        description: error.message,
+        description: "Failed to create user. Please try again.",
         variant: "destructive",
       });
     },
   });
 
-  const filteredUsers = users.filter((user: any) => {
-    const matchesSearch = 
-      `${user.firstName || ""} ${user.lastName || ""}`.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      user.email?.toLowerCase().includes(searchTerm.toLowerCase());
-    
-    const matchesRole = roleFilter === "all" || user.role === roleFilter;
-    
-    return matchesSearch && matchesRole;
+  const updateUserMutation = useMutation({
+    mutationFn: async ({ id, ...userData }: any) => {
+      return apiRequest(`/api/users/${id}`, {
+        method: "PATCH",
+        body: userData,
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/users"] });
+      setIsEditModalOpen(false);
+      setSelectedUser(null);
+      toast({
+        title: "User Updated",
+        description: "User has been updated successfully.",
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: "Error",
+        description: "Failed to update user. Please try again.",
+        variant: "destructive",
+      });
+    },
   });
 
-  const getUserSessions = (userId: string) => {
-    return sessions.filter((session: any) => 
-      session.studentId === userId || session.counsellorId === userId
-    );
+  const deleteUserMutation = useMutation({
+    mutationFn: async (id: string) => {
+      return apiRequest(`/api/users/${id}`, {
+        method: "DELETE",
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/users"] });
+      toast({
+        title: "User Deleted",
+        description: "User has been deleted successfully.",
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: "Error",
+        description: "Failed to delete user. Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const filteredUsers = users?.filter((user: any) => {
+    const matchesSearch = user.firstName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         user.lastName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         user.email.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesRole = roleFilter === "all" || user.role === roleFilter;
+    return matchesSearch && matchesRole;
+  }) || [];
+
+  const handleCreateUser = (userData: any) => {
+    createUserMutation.mutate(userData);
   };
 
-  const getRoleColor = (role: string) => {
-    switch (role) {
-      case "admin":
-        return "bg-red-100 text-red-800";
-      case "counsellor":
-        return "bg-purple-100 text-purple-800";
-      case "student":
-        return "bg-blue-100 text-blue-800";
-      default:
-        return "bg-neutral-100 text-neutral-800";
+  const handleUpdateUser = (userData: any) => {
+    updateUserMutation.mutate({ id: selectedUser.id, ...userData });
+  };
+
+  const handleDeleteUser = (id: string) => {
+    if (window.confirm("Are you sure you want to delete this user?")) {
+      deleteUserMutation.mutate(id);
     }
   };
 
-  const handleRoleChange = (userId: string, newRole: string) => {
-    updateRoleMutation.mutate({ userId, role: newRole });
+  const userStats = {
+    total: users?.length || 0,
+    students: users?.filter((u: any) => u.role === "student").length || 0,
+    counsellors: users?.filter((u: any) => u.role === "counsellor").length || 0,
+    admins: users?.filter((u: any) => u.role === "admin").length || 0,
   };
 
-  const getDisplayName = (user: any) => {
-    return `${user.firstName || ""} ${user.lastName || ""}`.trim() || "Unknown User";
-  };
-
-  const getInitials = (user: any) => {
-    return `${user.firstName?.[0] || ""}${user.lastName?.[0] || ""}` || "U";
-  };
-
-  if (isLoading) {
+  if (usersLoading) {
     return (
-      <div className="p-6">
-        <div className="animate-pulse">
-          <div className="h-8 bg-neutral-200 rounded w-1/4 mb-4"></div>
-          <div className="h-4 bg-neutral-200 rounded w-1/2 mb-8"></div>
-          <div className="space-y-4">
-            {[1, 2, 3, 4, 5].map((i) => (
-              <div key={i} className="h-20 bg-neutral-200 rounded-lg"></div>
-            ))}
-          </div>
+      <div className="p-6 space-y-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          {[...Array(4)].map((_, i) => (
+            <Card key={i} className="animate-pulse">
+              <CardHeader className="pb-3">
+                <div className="h-4 bg-neutral-200 rounded w-3/4"></div>
+              </CardHeader>
+              <CardContent>
+                <div className="h-8 bg-neutral-200 rounded w-1/2"></div>
+              </CardContent>
+            </Card>
+          ))}
         </div>
       </div>
     );
   }
 
   return (
-    <div className="p-6">
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-neutral-800 mb-2">User Management</h1>
-        <p className="text-neutral-600">Manage all system users and their permissions</p>
-      </div>
-
-      {/* Actions */}
-      <div className="flex flex-col sm:flex-row gap-4 mb-6">
-        <Button className="bg-primary text-white hover:bg-primary/90">
-          <Plus className="h-4 w-4 mr-2" />
-          Add New User
-        </Button>
-        <div className="flex-1 max-w-md">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-neutral-400" />
-            <Input
-              placeholder="Search users..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-10"
-            />
-          </div>
+    <div className="p-6 space-y-6">
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <h1 className="text-2xl font-bold text-neutral-900">User Management</h1>
+          <p className="text-neutral-600">Manage system users and their roles</p>
         </div>
-        <Select value={roleFilter} onValueChange={setRoleFilter}>
-          <SelectTrigger className="w-48">
-            <SelectValue placeholder="Filter by role" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Roles</SelectItem>
-            <SelectItem value="student">Students</SelectItem>
-            <SelectItem value="counsellor">Counsellors</SelectItem>
-            <SelectItem value="admin">Admins</SelectItem>
-          </SelectContent>
-        </Select>
+        <Dialog open={isCreateModalOpen} onOpenChange={setIsCreateModalOpen}>
+          <DialogTrigger asChild>
+            <Button>
+              <UserPlus className="h-4 w-4 mr-2" />
+              Add User
+            </Button>
+          </DialogTrigger>
+          <DialogContent className="sm:max-w-[425px]">
+            <DialogHeader>
+              <DialogTitle>Create New User</DialogTitle>
+            </DialogHeader>
+            <UserForm 
+              onSubmit={handleCreateUser}
+              isLoading={createUserMutation.isPending}
+            />
+          </DialogContent>
+        </Dialog>
       </div>
 
-      {/* Users List */}
-      <Card className="border-neutral-200">
-        <CardContent className="p-0">
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead className="bg-neutral-50">
-                <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-neutral-500 uppercase tracking-wider">
-                    User
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-neutral-500 uppercase tracking-wider">
-                    Role
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-neutral-500 uppercase tracking-wider">
-                    Status
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-neutral-500 uppercase tracking-wider">
-                    Last Active
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-neutral-500 uppercase tracking-wider">
-                    Sessions
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-neutral-500 uppercase tracking-wider">
-                    Actions
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-neutral-200">
-                {filteredUsers.map((user: any) => {
-                  const userSessions = getUserSessions(user.id);
-                  return (
-                    <tr key={user.id}>
-                      <td className="px-6 py-4 whitespace-nowrap">
+      {/* User Stats */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm font-medium text-neutral-600 flex items-center">
+              <Users className="h-4 w-4 mr-2" />
+              Total Users
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-primary">{userStats.total}</div>
+            <p className="text-sm text-neutral-500">Active users</p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm font-medium text-neutral-600 flex items-center">
+              <UserCheck className="h-4 w-4 mr-2" />
+              Students
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-green-600">{userStats.students}</div>
+            <p className="text-sm text-neutral-500">{Math.round((userStats.students / userStats.total) * 100)}% of users</p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm font-medium text-neutral-600 flex items-center">
+              <UserPlus className="h-4 w-4 mr-2" />
+              Counsellors
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-blue-600">{userStats.counsellors}</div>
+            <p className="text-sm text-neutral-500">{Math.round((userStats.counsellors / userStats.total) * 100)}% of users</p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm font-medium text-neutral-600 flex items-center">
+              <ShieldAlert className="h-4 w-4 mr-2" />
+              Admins
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-red-600">{userStats.admins}</div>
+            <p className="text-sm text-neutral-500">{Math.round((userStats.admins / userStats.total) * 100)}% of users</p>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Search and Filter */}
+      <div className="flex items-center gap-4 mb-6">
+        <div className="flex-1 relative">
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-neutral-400" />
+          <Input
+            placeholder="Search users..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="pl-10"
+          />
+        </div>
+        <div className="flex items-center gap-2">
+          <Filter className="h-4 w-4 text-neutral-400" />
+          <Select value={roleFilter} onValueChange={setRoleFilter}>
+            <SelectTrigger className="w-32">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Roles</SelectItem>
+              <SelectItem value="student">Students</SelectItem>
+              <SelectItem value="counsellor">Counsellors</SelectItem>
+              <SelectItem value="admin">Admins</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+
+      {/* Users Table */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Users ({filteredUsers.length})</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {filteredUsers.length === 0 ? (
+            <div className="text-center py-12">
+              <Users className="h-12 w-12 mx-auto mb-4 text-neutral-300" />
+              <p className="text-neutral-500">No users found</p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-neutral-200">
+                    <th className="text-left py-3 px-4 font-medium text-neutral-600">User</th>
+                    <th className="text-left py-3 px-4 font-medium text-neutral-600">Role</th>
+                    <th className="text-left py-3 px-4 font-medium text-neutral-600">Email</th>
+                    <th className="text-left py-3 px-4 font-medium text-neutral-600">Joined</th>
+                    <th className="text-left py-3 px-4 font-medium text-neutral-600">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredUsers.map((user: any) => (
+                    <tr key={user.id} className="border-b border-neutral-100 hover:bg-neutral-50">
+                      <td className="py-3 px-4">
                         <div className="flex items-center">
-                          <Avatar className="h-10 w-10">
-                            <AvatarFallback className="bg-primary text-white">
-                              {getInitials(user)}
-                            </AvatarFallback>
-                          </Avatar>
-                          <div className="ml-4">
-                            <div className="text-sm font-medium text-neutral-900">
-                              {getDisplayName(user)}
+                          {user.profileImageUrl ? (
+                            <img
+                              src={user.profileImageUrl}
+                              alt="Profile"
+                              className="w-8 h-8 rounded-full object-cover mr-3"
+                            />
+                          ) : (
+                            <div className="w-8 h-8 bg-neutral-200 rounded-full flex items-center justify-center mr-3">
+                              <UserCheck className="h-4 w-4 text-neutral-400" />
                             </div>
-                            <div className="text-sm text-neutral-500">
-                              {user.email || "No email"}
+                          )}
+                          <div>
+                            <div className="font-medium text-neutral-900">
+                              {user.firstName} {user.lastName}
                             </div>
+                            <div className="text-sm text-neutral-500">ID: {user.id}</div>
                           </div>
                         </div>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <Select
-                          value={user.role}
-                          onValueChange={(role) => handleRoleChange(user.id, role)}
-                          disabled={updateRoleMutation.isPending}
-                        >
-                          <SelectTrigger className="w-32">
-                            <SelectValue>
-                              <Badge className={getRoleColor(user.role)}>
-                                {user.role?.charAt(0).toUpperCase() + user.role?.slice(1)}
-                              </Badge>
-                            </SelectValue>
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="student">Student</SelectItem>
-                            <SelectItem value="counsellor">Counsellor</SelectItem>
-                            <SelectItem value="admin">Admin</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <Badge className="bg-green-100 text-green-800">
-                          Active
+                      <td className="py-3 px-4">
+                        <Badge variant="outline" className={
+                          user.role === "student" ? "text-green-600 border-green-600" :
+                          user.role === "counsellor" ? "text-blue-600 border-blue-600" :
+                          "text-red-600 border-red-600"
+                        }>
+                          {user.role}
                         </Badge>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-neutral-900">
-                        {user.updatedAt 
-                          ? new Date(user.updatedAt).toLocaleDateString()
-                          : "Never"
-                        }
+                      <td className="py-3 px-4">
+                        <div className="flex items-center">
+                          <Mail className="h-4 w-4 mr-2 text-neutral-400" />
+                          {user.email}
+                        </div>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-neutral-900">
-                        {userSessions.length}
+                      <td className="py-3 px-4">
+                        <div className="flex items-center">
+                          <Calendar className="h-4 w-4 mr-2 text-neutral-400" />
+                          {format(new Date(user.createdAt), "MMM d, yyyy")}
+                        </div>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                        <div className="flex space-x-2">
+                      <td className="py-3 px-4">
+                        <div className="flex items-center gap-2">
                           <Button
-                            variant="ghost"
                             size="sm"
-                            className="text-primary hover:text-primary/90"
+                            variant="outline"
+                            onClick={() => {
+                              setSelectedUser(user);
+                              setIsEditModalOpen(true);
+                            }}
                           >
-                            <Edit className="h-4 w-4 mr-1" />
-                            Edit
+                            <Edit className="h-4 w-4" />
                           </Button>
                           <Button
-                            variant="ghost"
                             size="sm"
-                            className="text-red-600 hover:text-red-900"
+                            variant="outline"
+                            onClick={() => handleDeleteUser(user.id)}
+                            disabled={deleteUserMutation.isPending}
                           >
-                            <Ban className="h-4 w-4 mr-1" />
-                            Suspend
+                            <Trash2 className="h-4 w-4" />
                           </Button>
                         </div>
                       </td>
                     </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-
-          {filteredUsers.length === 0 && (
-            <div className="text-center py-12 text-neutral-500">
-              <User className="h-16 w-16 mx-auto mb-4 text-neutral-300" />
-              <h3 className="text-lg font-medium text-neutral-900 mb-2">
-                {searchTerm || roleFilter !== "all" ? "No users found" : "No users yet"}
-              </h3>
-              <p className="text-neutral-600">
-                {searchTerm || roleFilter !== "all"
-                  ? "Try adjusting your search or filter criteria."
-                  : "Users will appear here once they register."
-                }
-              </p>
-            </div>
-          )}
-
-          {/* Pagination */}
-          {filteredUsers.length > 0 && (
-            <div className="bg-white px-4 py-3 flex items-center justify-between border-t border-neutral-200">
-              <div className="flex-1 flex justify-between sm:hidden">
-                <Button variant="outline" size="sm">
-                  Previous
-                </Button>
-                <Button variant="outline" size="sm">
-                  Next
-                </Button>
-              </div>
-              <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
-                <div>
-                  <p className="text-sm text-neutral-700">
-                    Showing <span className="font-medium">1</span> to{" "}
-                    <span className="font-medium">{Math.min(10, filteredUsers.length)}</span> of{" "}
-                    <span className="font-medium">{filteredUsers.length}</span> results
-                  </p>
-                </div>
-                <div>
-                  <nav className="relative z-0 inline-flex rounded-md shadow-sm -space-x-px">
-                    <Button variant="outline" size="sm">
-                      Previous
-                    </Button>
-                    <Button variant="outline" size="sm" className="bg-primary text-white">
-                      1
-                    </Button>
-                    <Button variant="outline" size="sm">
-                      2
-                    </Button>
-                    <Button variant="outline" size="sm">
-                      3
-                    </Button>
-                    <Button variant="outline" size="sm">
-                      Next
-                    </Button>
-                  </nav>
-                </div>
-              </div>
+                  ))}
+                </tbody>
+              </table>
             </div>
           )}
         </CardContent>
       </Card>
+
+      {/* Edit User Modal */}
+      <Dialog open={isEditModalOpen} onOpenChange={setIsEditModalOpen}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Edit User</DialogTitle>
+          </DialogHeader>
+          <UserForm 
+            user={selectedUser}
+            onSubmit={handleUpdateUser}
+            isLoading={updateUserMutation.isPending}
+          />
+        </DialogContent>
+      </Dialog>
     </div>
+  );
+}
+
+function UserForm({ user, onSubmit, isLoading }: any) {
+  const [formData, setFormData] = useState({
+    firstName: user?.firstName || "",
+    lastName: user?.lastName || "",
+    email: user?.email || "",
+    role: user?.role || "student",
+  });
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    onSubmit(formData);
+  };
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-4">
+      <div>
+        <Label htmlFor="firstName">First Name</Label>
+        <Input
+          id="firstName"
+          value={formData.firstName}
+          onChange={(e) => setFormData({...formData, firstName: e.target.value})}
+          required
+        />
+      </div>
+
+      <div>
+        <Label htmlFor="lastName">Last Name</Label>
+        <Input
+          id="lastName"
+          value={formData.lastName}
+          onChange={(e) => setFormData({...formData, lastName: e.target.value})}
+          required
+        />
+      </div>
+
+      <div>
+        <Label htmlFor="email">Email</Label>
+        <Input
+          id="email"
+          type="email"
+          value={formData.email}
+          onChange={(e) => setFormData({...formData, email: e.target.value})}
+          required
+        />
+      </div>
+
+      <div>
+        <Label htmlFor="role">Role</Label>
+        <Select value={formData.role} onValueChange={(value) => setFormData({...formData, role: value})}>
+          <SelectTrigger>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="student">Student</SelectItem>
+            <SelectItem value="counsellor">Counsellor</SelectItem>
+            <SelectItem value="admin">Admin</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      <Button type="submit" disabled={isLoading} className="w-full">
+        {isLoading ? (user ? "Updating..." : "Creating...") : (user ? "Update User" : "Create User")}
+      </Button>
+    </form>
   );
 }
