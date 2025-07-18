@@ -202,7 +202,10 @@ build_application() {
     # Build the application
     sudo -u $USER npm run build
 
-    # (Optional) Remove devDependencies after build
+    # Run migrations (while devDependencies are still present)
+    sudo -u $USER npm run db:migrate
+
+    # (Optional) Remove devDependencies after build and migration
     sudo -u $USER npm prune --production
     
     print_success "Application built successfully"
