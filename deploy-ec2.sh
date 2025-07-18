@@ -156,32 +156,38 @@ EOF
 deploy_application() {
     print_status "Deploying application code..."
     
-    # If this is run from the project directory, copy files
+    # Check if we're running from the project directory
     if [[ -f "package.json" ]]; then
-        print_status "Copying application files..."
-        
-        # Create temporary directory
-        temp_dir=$(mktemp -d)
-        
-        # Copy all files except node_modules and .git
-        rsync -av --exclude='node_modules' --exclude='.git' --exclude='dist' ./ "$temp_dir/"
-        
-        # Move to application directory
-        rm -rf "$APP_DIR"/*
-        mv "$temp_dir"/* "$APP_DIR/"
-        
-        # Clean up
-        rm -rf "$temp_dir"
-        
+        print_status "Copying application files from current directory..."
+        SOURCE_DIR="$(pwd)"
+    elif [[ -f "/home/ubuntu/awsassignment/package.json" ]]; then
+        print_status "Copying application files from /home/ubuntu/awsassignment..."
+        SOURCE_DIR="/home/ubuntu/awsassignment"
     else
-        print_error "No package.json found. Make sure you're running this from the project root."
+        print_error "No package.json found. Make sure the project exists in /home/ubuntu/awsassignment or run from project root."
         exit 1
     fi
+    
+    # Create temporary directory
+    temp_dir=$(mktemp -d)
+    
+    # Copy all files except node_modules and .git
+    rsync -av --exclude='node_modules' --exclude='.git' --exclude='dist' "$SOURCE_DIR/" "$temp_dir/"
+    
+    # Create application directory if it doesn't exist
+    mkdir -p "$APP_DIR"
+    
+    # Move to application directory
+    rm -rf "$APP_DIR"/*
+    mv "$temp_dir"/* "$APP_DIR/"
+    
+    # Clean up
+    rm -rf "$temp_dir"
     
     # Set ownership
     chown -R $USER:$USER $APP_DIR
     
-    print_success "Application code deployed"
+    print_success "Application code deployed from $SOURCE_DIR"
 }
 
 # Function to install dependencies and build
