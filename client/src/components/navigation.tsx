@@ -8,8 +8,37 @@ export default function Navigation() {
   const { user, isAuthenticated } = useAuth();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
-  const handleLogout = () => {
-    window.location.href = "/api/logout";
+  const handleLogout = async () => {
+    try {
+      const token = localStorage.getItem('auth_token');
+      if (token) {
+        const response = await fetch('/api/logout', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+        });
+        
+        if (response.ok) {
+          localStorage.removeItem('auth_token');
+          window.location.href = '/login';
+        } else {
+          console.error('Logout failed:', response.statusText);
+          // Even if logout fails on server, clear local token and redirect
+          localStorage.removeItem('auth_token');
+          window.location.href = '/login';
+        }
+      } else {
+        // No token found, just redirect to login
+        window.location.href = '/login';
+      }
+    } catch (error) {
+      console.error('Logout error:', error);
+      // Clear token and redirect even on error
+      localStorage.removeItem('auth_token');
+      window.location.href = '/login';
+    }
   };
 
   if (!isAuthenticated) return null;

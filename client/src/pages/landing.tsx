@@ -1,8 +1,11 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Heart, Users, BookOpen, MessageSquare } from "lucide-react";
+import { useLocation } from "wouter";
 
 export default function Landing() {
+  const [, navigate] = useLocation();
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-neutral-50 to-neutral-100">
       {/* Header */}
@@ -13,7 +16,7 @@ export default function Landing() {
               <Heart className="h-8 w-8 text-primary mr-3" />
               <h1 className="text-xl font-semibold text-neutral-800">Youth Empowerment Hub</h1>
             </div>
-            <Button onClick={() => window.location.href = '/api/login'}>
+            <Button onClick={() => navigate("/login")}>
               Sign In
             </Button>
           </div>
@@ -33,7 +36,7 @@ export default function Landing() {
           <Button 
             size="lg" 
             className="bg-primary hover:bg-primary/90 text-white"
-            onClick={() => window.location.href = '/api/login'}
+            onClick={() => navigate("/login")}
           >
             Get Started Today
           </Button>

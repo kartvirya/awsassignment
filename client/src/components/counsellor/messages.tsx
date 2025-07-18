@@ -45,10 +45,7 @@ export default function CounsellorMessages() {
 
   const sendMessageMutation = useMutation({
     mutationFn: async (messageData: any) => {
-      return apiRequest("/api/messages", {
-        method: "POST",
-        body: messageData,
-      });
+      return apiRequest("POST", "/api/messages", messageData);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/messages"] });

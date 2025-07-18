@@ -25,7 +25,7 @@ export default function AdminOverview({ setActiveView }: AdminOverviewProps) {
   });
 
   const { data: sessions, isLoading: sessionsLoading } = useQuery({
-    queryKey: ["/api/sessions"],
+    queryKey: ["/api/sessions/all"],
   });
 
   const { data: resources, isLoading: resourcesLoading } = useQuery({
@@ -37,7 +37,7 @@ export default function AdminOverview({ setActiveView }: AdminOverviewProps) {
   });
 
   const { data: systemStats, isLoading: statsLoading } = useQuery({
-    queryKey: ["/api/admin/stats"],
+    queryKey: ["/api/analytics/stats"],
   });
 
   const totalUsers = users?.length || 0;

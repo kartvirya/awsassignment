@@ -52,10 +52,7 @@ export default function CounsellorSessions() {
 
   const updateSessionMutation = useMutation({
     mutationFn: async ({ id, ...data }: any) => {
-      return apiRequest(`/api/sessions/${id}`, {
-        method: "PATCH",
-        body: data,
-      });
+      return apiRequest("PATCH", `/api/sessions/${id}`, data);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/sessions/counsellor"] });

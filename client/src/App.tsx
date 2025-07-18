@@ -7,6 +7,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useDevAuth } from "@/hooks/useDevAuth";
 import NotFound from "@/pages/not-found";
 import Landing from "@/pages/landing";
+import Login from "@/pages/login";
 import StudentDashboard from "@/pages/student-dashboard";
 import CounsellorDashboard from "@/pages/counsellor-dashboard";
 import AdminDashboard from "@/pages/admin-dashboard";
@@ -34,8 +35,13 @@ function Router() {
   return (
     <>
       <Switch>
+        {/* Login route should always be accessible */}
+        <Route path="/login" component={Login} />
+        
         {!isAuthenticated ? (
-          <Route path="/" component={Landing} />
+          <>
+            <Route path="/" component={Landing} />
+          </>
         ) : (
           <>
             <Route path="/" component={() => {

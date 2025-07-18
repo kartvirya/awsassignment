@@ -1,0 +1,89 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: collegesafe-postgres
+    environment:
+      POSTGRES_DB: collegesafe
+      POSTGRES_USER: collegesafe
+      POSTGRES_PASSWORD: collegesafe123
+      POSTGRES_INITDB_ARGS: "--encoding=UTF-8 --locale=C"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./migrations:/docker-entrypoint-initdb.d
+    ports:
+      - "5432:5432"
+    networks:
+      - collegesafe-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U collegesafe -d collegesafe"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  # Redis for session storage (optional)
+  redis:
+    image: redis:7-alpine
+    container_name: collegesafe-redis
+    ports:
+      - "6379:6379"
+    networks:
+      - collegesafe-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # CollegeSafe Application
+  app:
+    build: .
+    container_name: collegesafe-app
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://collegesafe:collegesafe123@postgres:5432/collegesafe
+      SESSION_SECRET: your-super-secret-session-key-for-docker
+      PORT: 3000
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./uploads:/app/uploads
+    networks:
+      - collegesafe-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Nginx reverse proxy (optional)
+  nginx:
+    image: nginx:alpine
+    container_name: collegesafe-nginx
+    depends_on:
+      - app
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./ssl:/etc/nginx/ssl:ro
+    networks:
+      - collegesafe-network
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+    driver: local
+
+networks:
+  collegesafe-network:
+    driver: bridge

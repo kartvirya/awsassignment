@@ -54,10 +54,8 @@ export default function StudentSessions() {
 
   const createSessionMutation = useMutation({
     mutationFn: async (sessionData: any) => {
-      return apiRequest("/api/sessions", {
-        method: "POST",
-        body: sessionData,
-      });
+      const response = await apiRequest("POST", "/api/sessions", sessionData);
+      return response.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/sessions/student"] });
@@ -85,7 +83,6 @@ export default function StudentSessions() {
     createSessionMutation.mutate({
       counsellorId: data.counsellorId,
       scheduledAt: new Date(data.scheduledAt).toISOString(),
-      type: data.type,
       notes: data.notes,
     });
   };

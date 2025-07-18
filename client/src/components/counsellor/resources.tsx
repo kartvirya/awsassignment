@@ -58,10 +58,7 @@ export default function CounsellorResources() {
 
   const createResourceMutation = useMutation({
     mutationFn: async (resourceData: any) => {
-      return apiRequest("/api/resources", {
-        method: "POST",
-        body: resourceData,
-      });
+      return apiRequest("POST", "/api/resources", resourceData);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/resources"] });
@@ -82,10 +79,7 @@ export default function CounsellorResources() {
 
   const updateResourceMutation = useMutation({
     mutationFn: async ({ id, ...resourceData }: any) => {
-      return apiRequest(`/api/resources/${id}`, {
-        method: "PATCH",
-        body: resourceData,
-      });
+      return apiRequest("PATCH", `/api/resources/${id}`, resourceData);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/resources"] });
@@ -107,9 +101,7 @@ export default function CounsellorResources() {
 
   const deleteResourceMutation = useMutation({
     mutationFn: async (id: number) => {
-      return apiRequest(`/api/resources/${id}`, {
-        method: "DELETE",
-      });
+      return apiRequest("DELETE", `/api/resources/${id}`);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/resources"] });
