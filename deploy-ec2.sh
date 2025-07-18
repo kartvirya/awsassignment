@@ -196,11 +196,14 @@ build_application() {
     
     cd $APP_DIR
     
-    # Install dependencies as app user
-    sudo -u $USER npm install --production
-    
+    # Install all dependencies (including dev)
+    sudo -u $USER npm install
+
     # Build the application
     sudo -u $USER npm run build
+
+    # (Optional) Remove devDependencies after build
+    sudo -u $USER npm prune --production
     
     print_success "Application built successfully"
 }
