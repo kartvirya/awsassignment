@@ -3,6 +3,9 @@ import { readFileSync } from 'fs';
 import { join } from 'path';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
+import dotenv from 'dotenv';
+
+dotenv.config();
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -14,7 +17,7 @@ const pool = new Pool({
     rejectUnauthorized: true,
   } : false,
 });
-
+console.log(process.env.DATABASE_URL);
 // Migration tracking table
 const MIGRATION_TABLE = `
   CREATE TABLE IF NOT EXISTS schema_migrations (
