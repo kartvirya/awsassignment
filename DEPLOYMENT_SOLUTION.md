@@ -286,3 +286,66 @@ When deployment is successful, you should see:
 
 **✅ All deployment issues have been resolved!**
 **🎯 The application is now ready for production deployment on EC2 or any server.** 
+
+## 🔧 **Fix the Repository Error**
+
+### **Step 1: Remove the problematic Warp repository**
+```bash
+<code_block_to_apply_changes_from>
+```
+
+### **Step 2: Update package lists again**
+```bash
+sudo apt update
+```
+
+### **Step 3: Continue with the deployment**
+```bash
+sudo ./deploy-production.sh
+```
+
+## 🎯 **Alternative: Use the Resume Script**
+
+If you want to skip the system dependencies (since they're likely already installed), use the resume script:
+
+```bash
+sudo ./resume-deployment.sh
+```
+
+## 🎯 **What's happening:**
+
+The error is from a Warp terminal repository that's not available on your EC2 instance. This doesn't affect your application deployment - it's just a package repository issue.
+
+## ⚡ **Quick Fix Commands:**
+
+Run these commands in your SSH terminal:
+
+```bash
+# Fix repository issue
+sudo rm -f /etc/apt/sources.list.d/warp.list
+sudo rm -f /etc/apt/sources.list.d/warp-stable.list
+
+# Update package lists
+sudo apt update
+
+# Continue deployment
+sudo ./deploy-production.sh
+```
+
+## 🎯 **Expected Output After Fix:**
+
+You should see:
+```
+[INFO] Updating package lists...
+Reading package lists... Done
+[INFO] Installing required packages...
+[SUCCESS] System dependencies installed
+```
+
+The deployment should then continue with:
+- Installing Node.js
+- Setting up PostgreSQL
+- Building your application
+- Starting services
+
+**Go ahead and run the fix commands!** Let me know what happens next. 🚀 
