@@ -31,6 +31,7 @@ export interface IStorage {
   
   // User management
   getAllUsers(): Promise<User[]>;
+  getUsers(): Promise<User[]>; // Alias for getAllUsers
   getUsersByRole(role: string): Promise<User[]>;
   updateUserRole(id: string, role: string): Promise<User>;
   
@@ -44,6 +45,7 @@ export interface IStorage {
   
   // Session operations
   createSession(session: InsertSession): Promise<Session>;
+  getSessions(): Promise<Session[]>; // Get all sessions
   getSessionsByStudent(studentId: string): Promise<Session[]>;
   getSessionsByCounsellor(counsellorId: string): Promise<Session[]>;
   getSessionById(id: number): Promise<Session | undefined>;
@@ -53,6 +55,7 @@ export interface IStorage {
   
   // Message operations
   createMessage(message: InsertMessage): Promise<Message>;
+  getMessages(): Promise<Message[]>; // Get all messages
   getMessagesBetweenUsers(user1Id: string, user2Id: string): Promise<Message[]>;
   getConversations(userId: string): Promise<any[]>;
   markMessageAsRead(messageId: number): Promise<void>;
@@ -86,13 +89,8 @@ class DatabaseStorage implements IStorage {
         target: users.id,
         set: {
           email: user.email,
-          firstName: user.firstName,
-          lastName: user.lastName,
-          role: user.role,
-          profileImageUrl: user.profileImageUrl,
           passwordHash: user.passwordHash,
           passwordSalt: user.passwordSalt,
-          updatedAt: new Date(),
         },
       })
       .returning();
@@ -103,6 +101,10 @@ class DatabaseStorage implements IStorage {
     return await db.select().from(users).orderBy(asc(users.createdAt));
   }
 
+  async getUsers(): Promise<User[]> {
+    return await db.select().from(users).orderBy(asc(users.createdAt));
+  }
+
   async getUsersByRole(role: string): Promise<User[]> {
     return await db.select().from(users).where(eq(users.role, role as any));
   }
@@ -110,7 +112,7 @@ class DatabaseStorage implements IStorage {
   async updateUserRole(id: string, role: string): Promise<User> {
     const [user] = await db
       .update(users)
-      .set({ role: role as any, updatedAt: new Date() })
+      .set({ role: role as any })
       .where(eq(users.id, id))
       .returning();
     return user;
@@ -142,7 +144,7 @@ class DatabaseStorage implements IStorage {
   async updateResource(id: number, resource: Partial<InsertResource>): Promise<Resource> {
     const [result] = await db
       .update(resources)
-      .set({ ...resource, updatedAt: new Date() })
+      .set({ ...resource })
       .where(eq(resources.id, id))
       .returning();
     return result;
@@ -156,6 +158,10 @@ class DatabaseStorage implements IStorage {
   async createSession(session: InsertSession): Promise<Session> {
     const [result] = await db.insert(sessionsTable).values(session).returning();
     return result;
+  }
+
+  async getSessions(): Promise<Session[]> {
+    return await db.select().from(sessionsTable).orderBy(desc(sessionsTable.createdAt));
   }
 
   async getSessionsByStudent(studentId: string): Promise<Session[]> {
@@ -182,7 +188,7 @@ class DatabaseStorage implements IStorage {
   async updateSession(id: number, session: Partial<InsertSession>): Promise<Session> {
     const [result] = await db
       .update(sessionsTable)
-      .set({ ...session, updatedAt: new Date() })
+      .set({ ...session })
       .where(eq(sessionsTable.id, id))
       .returning();
     return result;
@@ -208,6 +214,10 @@ class DatabaseStorage implements IStorage {
   async createMessage(message: InsertMessage): Promise<Message> {
     const [result] = await db.insert(messages).values(message).returning();
     return result;
+  }
+
+  async getMessages(): Promise<Message[]> {
+    return await db.select().from(messages).orderBy(desc(messages.createdAt));
   }
 
   async getMessagesBetweenUsers(user1Id: string, user2Id: string): Promise<Message[]> {
@@ -273,7 +283,7 @@ class DatabaseStorage implements IStorage {
   async updateUserProgress(id: number, progress: Partial<InsertUserProgress>): Promise<UserProgress> {
     const [result] = await db
       .update(userProgress)
-      .set({ ...progress, updatedAt: new Date() })
+      .set({ ...progress })
       .where(eq(userProgress.id, id))
       .returning();
     return result;
