@@ -431,7 +431,7 @@ EOF
     
     # Replace the original routes file
     if [ -f "$APP_DIR/server/routes.ts" ]; then
-        mv $APP_DIR/server/routes.ts $APP_DIR/server/routes-original.ts
+    mv $APP_DIR/server/routes.ts $APP_DIR/server/routes-original.ts
     fi
     mv $APP_DIR/server/routes-fixed.ts $APP_DIR/server/routes.ts
     
