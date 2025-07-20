@@ -5,7 +5,7 @@ export function useAuth() {
   const token = localStorage.getItem("auth_token");
   
   const { data: user, isLoading } = useQuery<User>({
-    queryKey: ["/api/auth/user"],
+    queryKey: ["/api/auth/user", token],
     queryFn: async () => {
       const response = await fetch("/api/auth/user", {
         headers: token ? { Authorization: `Bearer ${token}` } : {},

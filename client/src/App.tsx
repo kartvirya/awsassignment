@@ -4,22 +4,16 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { useAuth } from "@/hooks/useAuth";
-import { useDevAuth } from "@/hooks/useDevAuth";
 import NotFound from "@/pages/not-found";
 import Landing from "@/pages/landing";
 import Login from "@/pages/login";
+import Signup from "@/pages/signup";
 import StudentDashboard from "@/pages/student-dashboard";
 import CounsellorDashboard from "@/pages/counsellor-dashboard";
 import AdminDashboard from "@/pages/admin-dashboard";
-import DevUserSwitcher from "@/components/dev-user-switcher";
 
 function Router() {
-  const auth = useAuth();
-  const devAuth = useDevAuth();
-  
-  // Use dev auth in development mode, otherwise use normal auth
-  const currentAuth = import.meta.env.DEV && devAuth.currentUserId ? devAuth : auth;
-  const { isAuthenticated, isLoading, user } = currentAuth;
+  const { isAuthenticated, isLoading, user } = useAuth();
 
   if (isLoading) {
     return (
@@ -33,39 +27,34 @@ function Router() {
   }
 
   return (
-    <>
-      <Switch>
-        {/* Login route should always be accessible */}
-        <Route path="/login" component={Login} />
-        
-        {!isAuthenticated ? (
-          <>
-            <Route path="/" component={Landing} />
-          </>
-        ) : (
-          <>
-            <Route path="/" component={() => {
-              if (user?.role === 'student') return <StudentDashboard />;
-              if (user?.role === 'counsellor') return <CounsellorDashboard />;
-              if (user?.role === 'admin') return <AdminDashboard />;
-              return <Landing />;
-            }} />
-            <Route path="/student" component={StudentDashboard} />
-            <Route path="/counsellor" component={CounsellorDashboard} />
-            <Route path="/admin" component={AdminDashboard} />
-          </>
-        )}
-        <Route component={NotFound} />
-      </Switch>
-      
-      {/* Dev mode user switcher */}
-      {import.meta.env.DEV && (
-        <DevUserSwitcher
-          onUserSelect={devAuth.switchToUser}
-          currentUserId={devAuth.currentUserId || undefined}
-        />
+    <Switch>
+      {!isAuthenticated ? (
+        <>
+          <Route path="/" component={Landing} />
+          <Route path="/login" component={Login} />
+          <Route path="/signup" component={Signup} />
+          <Route component={Login} />
+        </>
+      ) : (
+        <>
+          <Route path="/" component={() => {
+            if (user?.role === 'student') return <StudentDashboard />;
+            if (user?.role === 'counsellor') return <CounsellorDashboard />;
+            if (user?.role === 'admin') return <AdminDashboard />;
+            return <Landing />;
+          }} />
+          <Route path="/student" component={StudentDashboard} />
+          <Route path="/counsellor" component={CounsellorDashboard} />
+          <Route path="/admin" component={AdminDashboard} />
+          <Route component={() => {
+            if (user?.role === 'student') return <StudentDashboard />;
+            if (user?.role === 'counsellor') return <CounsellorDashboard />;
+            if (user?.role === 'admin') return <AdminDashboard />;
+            return <Landing />;
+          }} />
+        </>
       )}
-    </>
+    </Switch>
   );
 }
 

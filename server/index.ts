@@ -1,13 +1,33 @@
 import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
-
-// Remove the top-level import of setupVite, serveStatic, log
-// import { setupVite, serveStatic, log } from "./vite";
+import { setupVite, serveStatic, log } from "./vite";
+import { checkDatabaseConnection } from "./db";
 
 const app = express();
-app.use(express.json());
-app.use(express.urlencoded({ extended: false }));
 
+// Trust proxy for proper IP handling behind reverse proxy
+app.set('trust proxy', 1);
+
+// Body parsing middleware
+app.use(express.json({ limit: process.env.MAX_FILE_SIZE || '10mb' }));
+app.use(express.urlencoded({ extended: false, limit: process.env.MAX_FILE_SIZE || '10mb' }));
+
+// CORS middleware
+app.use((req, res, next) => {
+  const origin = process.env.CORS_ORIGIN || 'http://localhost:3000';
+  res.header('Access-Control-Allow-Origin', origin);
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+  res.header('Access-Control-Allow-Credentials', 'true');
+  
+  if (req.method === 'OPTIONS') {
+    res.sendStatus(200);
+  } else {
+    next();
+  }
+});
+
+// Request logging middleware
 app.use((req, res, next) => {
   const start = Date.now();
   const path = req.path;
@@ -31,48 +51,86 @@ app.use((req, res, next) => {
         logLine = logLine.slice(0, 79) + "…";
       }
 
-      // Use a fallback logger if log is not available yet
-      if (typeof log === "function") {
-        log(logLine);
-      } else {
-        console.log(logLine);
-      }
+      log(logLine);
     }
   });
 
   next();
 });
 
+// Health check endpoint
+app.get('/health', async (req: Request, res: Response) => {
+  try {
+    const dbConnected = await checkDatabaseConnection();
+    const status = {
+      status: 'ok',
+      timestamp: new Date().toISOString(),
+      uptime: process.uptime(),
+      environment: process.env.NODE_ENV || 'development',
+      database: dbConnected ? 'connected' : 'disconnected',
+      memory: process.memoryUsage(),
+      version: process.env.npm_package_version || '1.0.0'
+    };
+
+    const statusCode = dbConnected ? 200 : 503;
+    res.status(statusCode).json(status);
+  } catch (error) {
+    res.status(503).json({
+      status: 'error',
+      timestamp: new Date().toISOString(),
+      error: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
 (async () => {
   const server = await registerRoutes(app);
 
+  // Error handling middleware
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
     const status = err.status || err.statusCode || 500;
     const message = err.message || "Internal Server Error";
 
-    res.status(status).json({ message });
-    throw err;
+    // Log error
+    console.error('Error:', err);
+
+    res.status(status).json({ 
+      message,
+      ...(process.env.NODE_ENV === 'development' && { stack: err.stack })
+    });
   });
 
-  let log = console.log; // fallback logger
-
+  // Setup Vite in development, serve static in production
   if (app.get("env") === "development") {
-    // Dynamically import Vite-related code only in development
-    const { setupVite, log: viteLog } = await import("./vite");
-    log = viteLog;
     await setupVite(app, server);
   } else {
-    // Dynamically import serveStatic and log for production
-    const { serveStatic, log: prodLog } = await import("./vite");
-    log = prodLog;
     serveStatic(app);
   }
 
-  // ALWAYS serve the app on the port specified in the environment variable PORT
-  // Default to 3000 if not specified.
-  // this serves both the API and the client.
-  const port = parseInt(process.env.PORT || '3000', 10);
-  server.listen(port, () => {
-    log(`serving on port ${port}`);
+  // Start server
+  const port = parseInt(process.env.PORT || '3001', 10);
+  const host = process.env.HOST || '0.0.0.0';
+  
+  server.listen(port, host, () => {
+    log(`🚀 Server running on http://${host}:${port}`);
+    log(`📊 Health check available at http://${host}:${port}/health`);
+    log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
+  });
+
+  // Graceful shutdown
+  process.on('SIGTERM', () => {
+    log('SIGTERM received, shutting down gracefully...');
+    server.close(() => {
+      log('Server closed');
+      process.exit(0);
+    });
+  });
+
+  process.on('SIGINT', () => {
+    log('SIGINT received, shutting down gracefully...');
+    server.close(() => {
+      log('Server closed');
+      process.exit(0);
+    });
   });
 })();

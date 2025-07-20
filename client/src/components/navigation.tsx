@@ -1,12 +1,15 @@
 import { useAuth } from "@/hooks/useAuth";
+import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { LogOut, Menu, X } from "lucide-react";
 import { useState } from "react";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 
 export default function Navigation() {
   const { user, isAuthenticated } = useAuth();
+  const [, navigate] = useLocation();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const queryClient = useQueryClient();
 
   const handleLogout = async () => {
     try {
@@ -22,21 +25,27 @@ export default function Navigation() {
         
         if (response.ok) {
           localStorage.removeItem('auth_token');
+          // Invalidate all queries to clear the cache
+          queryClient.clear();
+          // Force a page refresh to ensure clean state
           window.location.href = '/login';
         } else {
           console.error('Logout failed:', response.statusText);
           // Even if logout fails on server, clear local token and redirect
           localStorage.removeItem('auth_token');
+          queryClient.clear();
           window.location.href = '/login';
         }
       } else {
         // No token found, just redirect to login
+        queryClient.clear();
         window.location.href = '/login';
       }
     } catch (error) {
       console.error('Logout error:', error);
       // Clear token and redirect even on error
       localStorage.removeItem('auth_token');
+      queryClient.clear();
       window.location.href = '/login';
     }
   };

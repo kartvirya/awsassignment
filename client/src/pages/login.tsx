@@ -1,12 +1,12 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useLocation } from "wouter";
+import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Heart, Mail, Lock } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { useAuth } from "@/hooks/useAuth";
 
 export default function Login() {
   const [email, setEmail] = useState("");
@@ -14,6 +14,7 @@ export default function Login() {
   const [isLoading, setIsLoading] = useState(false);
   const [, navigate] = useLocation();
   const { toast } = useToast();
+  const queryClient = useQueryClient();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -34,14 +35,16 @@ export default function Login() {
         // Store the token
         localStorage.setItem("auth_token", data.token);
         
+        // Invalidate and refetch user data
+        queryClient.invalidateQueries({ queryKey: ["/api/auth/user"] });
+        
         toast({
           title: "Login successful",
           description: `Welcome back, ${data.user.firstName}!`,
         });
 
-        // Redirect to dashboard
-        navigate("/");
-        window.location.reload(); // Force reload to pick up new auth state
+        // Force a page refresh to ensure authentication state is updated
+        window.location.href = "/";
       } else {
         toast({
           title: "Login failed",
@@ -114,13 +117,20 @@ export default function Login() {
             </Button>
           </form>
           
-          <div className="mt-6 space-y-2 text-sm text-neutral-600">
-            <p className="text-center font-medium">Development Mode - Test Accounts:</p>
-            <div className="space-y-1 text-xs">
-              <p>Admin: admin@example.com (any password)</p>
-              <p>Student: student@example.com (any password)</p>
-              <p>Counsellor: counsellor@example.com (any password)</p>
+          <div className="mt-6 space-y-4">
+            <div className="text-center">
+              <p className="text-sm text-neutral-600">
+                Don't have an account?{" "}
+                <button
+                  onClick={() => navigate("/signup")}
+                  className="text-primary hover:underline font-medium"
+                >
+                  Sign up
+                </button>
+              </p>
             </div>
+            
+
           </div>
         </CardContent>
       </Card>

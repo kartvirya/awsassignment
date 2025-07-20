@@ -16,11 +16,7 @@ import {
   type UserProgress,
 } from "@shared/schema";
 import { db } from "./db";
-import { memoryStorage } from "./memoryStorage";
-import { eq, and, desc, asc, count, sql, or } from "drizzle-orm";
-
-// Use memory storage only in development mode and when DATABASE_URL is not set
-const useMemoryStorage = process.env.NODE_ENV === 'development' && !process.env.DATABASE_URL;
+import { eq, and, desc, asc, count, sql } from "drizzle-orm";
 
 // Interface for storage operations
 export interface IStorage {
@@ -31,7 +27,6 @@ export interface IStorage {
   
   // User management
   getAllUsers(): Promise<User[]>;
-  getUsers(): Promise<User[]>; // Alias for getAllUsers
   getUsersByRole(role: string): Promise<User[]>;
   updateUserRole(id: string, role: string): Promise<User>;
   
@@ -45,7 +40,6 @@ export interface IStorage {
   
   // Session operations
   createSession(session: InsertSession): Promise<Session>;
-  getSessions(): Promise<Session[]>; // Get all sessions
   getSessionsByStudent(studentId: string): Promise<Session[]>;
   getSessionsByCounsellor(counsellorId: string): Promise<Session[]>;
   getSessionById(id: number): Promise<Session | undefined>;
@@ -55,21 +49,27 @@ export interface IStorage {
   
   // Message operations
   createMessage(message: InsertMessage): Promise<Message>;
-  getMessages(): Promise<Message[]>; // Get all messages
   getMessagesBetweenUsers(user1Id: string, user2Id: string): Promise<Message[]>;
   getConversations(userId: string): Promise<any[]>;
-  markMessageAsRead(messageId: number): Promise<void>;
+  markMessageAsRead(id: number): Promise<void>;
   
   // Progress operations
-  createUserProgress(progress: InsertUserProgress): Promise<UserProgress>;
+  createOrUpdateProgress(progress: InsertUserProgress): Promise<UserProgress>;
   getUserProgress(userId: string): Promise<UserProgress[]>;
-  updateUserProgress(id: number, progress: Partial<InsertUserProgress>): Promise<UserProgress>;
+  getProgressByResource(resourceId: number): Promise<UserProgress[]>;
   
   // Analytics
-  getSystemStats(): Promise<any>;
+  getSystemStats(): Promise<{
+    totalUsers: number;
+    totalStudents: number;
+    totalCounsellors: number;
+    totalSessions: number;
+    totalResources: number;
+    completedSessions: number;
+  }>;
 }
 
-class DatabaseStorage implements IStorage {
+export class DatabaseStorage implements IStorage {
   // User operations
   async getUser(id: string): Promise<User | undefined> {
     const [user] = await db.select().from(users).where(eq(users.id, id));
@@ -81,27 +81,23 @@ class DatabaseStorage implements IStorage {
     return user;
   }
 
-  async upsertUser(user: UpsertUser): Promise<User> {
-    const [result] = await db
+  async upsertUser(userData: UpsertUser): Promise<User> {
+    const [user] = await db
       .insert(users)
-      .values(user)
+      .values(userData)
       .onConflictDoUpdate({
         target: users.id,
         set: {
-          email: user.email,
-          passwordHash: user.passwordHash,
-          passwordSalt: user.passwordSalt,
+          ...userData,
+          updatedAt: new Date(),
         },
       })
       .returning();
-    return result;
+    return user;
   }
 
+  // User management
   async getAllUsers(): Promise<User[]> {
-    return await db.select().from(users).orderBy(asc(users.createdAt));
-  }
-
-  async getUsers(): Promise<User[]> {
     return await db.select().from(users).orderBy(asc(users.createdAt));
   }
 
@@ -112,7 +108,7 @@ class DatabaseStorage implements IStorage {
   async updateUserRole(id: string, role: string): Promise<User> {
     const [user] = await db
       .update(users)
-      .set({ role: role as any })
+      .set({ role: role as any, updatedAt: new Date() })
       .where(eq(users.id, id))
       .returning();
     return user;
@@ -120,48 +116,60 @@ class DatabaseStorage implements IStorage {
 
   // Resource operations
   async createResource(resource: InsertResource): Promise<Resource> {
-    const [result] = await db.insert(resources).values(resource).returning();
-    return result;
+    const [newResource] = await db
+      .insert(resources)
+      .values(resource)
+      .returning();
+    return newResource;
   }
 
   async getResources(): Promise<Resource[]> {
-    return await db.select().from(resources).orderBy(desc(resources.createdAt));
+    return await db
+      .select()
+      .from(resources)
+      .where(eq(resources.isActive, true))
+      .orderBy(desc(resources.createdAt));
   }
 
   async getResourcesByType(type: string): Promise<Resource[]> {
     return await db
       .select()
       .from(resources)
-      .where(eq(resources.type, type))
+      .where(and(eq(resources.type, type as any), eq(resources.isActive, true)))
       .orderBy(desc(resources.createdAt));
   }
 
   async getResourceById(id: number): Promise<Resource | undefined> {
-    const [resource] = await db.select().from(resources).where(eq(resources.id, id));
+    const [resource] = await db
+      .select()
+      .from(resources)
+      .where(eq(resources.id, id));
     return resource;
   }
 
   async updateResource(id: number, resource: Partial<InsertResource>): Promise<Resource> {
-    const [result] = await db
+    const [updatedResource] = await db
       .update(resources)
-      .set({ ...resource })
+      .set({ ...resource, updatedAt: new Date() })
       .where(eq(resources.id, id))
       .returning();
-    return result;
+    return updatedResource;
   }
 
   async deleteResource(id: number): Promise<void> {
-    await db.delete(resources).where(eq(resources.id, id));
+    await db
+      .update(resources)
+      .set({ isActive: false, updatedAt: new Date() })
+      .where(eq(resources.id, id));
   }
 
   // Session operations
   async createSession(session: InsertSession): Promise<Session> {
-    const [result] = await db.insert(sessionsTable).values(session).returning();
-    return result;
-  }
-
-  async getSessions(): Promise<Session[]> {
-    return await db.select().from(sessionsTable).orderBy(desc(sessionsTable.createdAt));
+    const [newSession] = await db
+      .insert(sessionsTable)
+      .values(session)
+      .returning();
+    return newSession;
   }
 
   async getSessionsByStudent(studentId: string): Promise<Session[]> {
@@ -181,17 +189,20 @@ class DatabaseStorage implements IStorage {
   }
 
   async getSessionById(id: number): Promise<Session | undefined> {
-    const [session] = await db.select().from(sessionsTable).where(eq(sessionsTable.id, id));
+    const [session] = await db
+      .select()
+      .from(sessionsTable)
+      .where(eq(sessionsTable.id, id));
     return session;
   }
 
   async updateSession(id: number, session: Partial<InsertSession>): Promise<Session> {
-    const [result] = await db
+    const [updatedSession] = await db
       .update(sessionsTable)
-      .set({ ...session })
+      .set({ ...session, updatedAt: new Date() })
       .where(eq(sessionsTable.id, id))
       .returning();
-    return result;
+    return updatedSession;
   }
 
   async getPendingSessions(): Promise<Session[]> {
@@ -203,21 +214,31 @@ class DatabaseStorage implements IStorage {
   }
 
   async getSessionsWithUsers(): Promise<any[]> {
-    // For now, return sessions without user details to avoid the alias issue
     return await db
-      .select()
+      .select({
+        id: sessionsTable.id,
+        scheduledAt: sessionsTable.scheduledAt,
+        status: sessionsTable.status,
+        type: sessionsTable.type,
+        notes: sessionsTable.notes,
+        studentName: sql<string>`concat(${users.firstName}, ' ', ${users.lastName})`.as('studentName'),
+        counsellorName: sql<string>`concat(c.first_name, ' ', c.last_name)`.as('counsellorName'),
+        studentEmail: users.email,
+        counsellorEmail: sql<string>`c.email`.as('counsellorEmail'),
+      })
       .from(sessionsTable)
+      .innerJoin(users, eq(sessionsTable.studentId, users.id))
+      .innerJoin(sql`users c`, sql`${sessionsTable.counsellorId} = c.id`)
       .orderBy(desc(sessionsTable.scheduledAt));
   }
 
   // Message operations
   async createMessage(message: InsertMessage): Promise<Message> {
-    const [result] = await db.insert(messages).values(message).returning();
-    return result;
-  }
-
-  async getMessages(): Promise<Message[]> {
-    return await db.select().from(messages).orderBy(desc(messages.createdAt));
+    const [newMessage] = await db
+      .insert(messages)
+      .values(message)
+      .returning();
+    return newMessage;
   }
 
   async getMessagesBetweenUsers(user1Id: string, user2Id: string): Promise<Message[]> {
@@ -226,50 +247,68 @@ class DatabaseStorage implements IStorage {
       .from(messages)
       .where(
         and(
-          or(
-            and(eq(messages.senderId, user1Id), eq(messages.receiverId, user2Id)),
-            and(eq(messages.senderId, user2Id), eq(messages.receiverId, user1Id))
-          )
+          eq(messages.senderId, user1Id),
+          eq(messages.receiverId, user2Id)
         )
       )
       .orderBy(asc(messages.createdAt));
   }
 
   async getConversations(userId: string): Promise<any[]> {
-    const conversations = await db
+    // This is a simplified version - in production, you'd want a more sophisticated query
+    return await db
       .select({
-        otherUser: users,
-        lastMessage: messages,
-        unreadCount: count(messages.id),
+        id: messages.id,
+        senderId: messages.senderId,
+        receiverId: messages.receiverId,
+        content: messages.content,
+        status: messages.status,
+        createdAt: messages.createdAt,
+        senderName: sql<string>`concat(sender.first_name, ' ', sender.last_name)`.as('senderName'),
+        receiverName: sql<string>`concat(receiver.first_name, ' ', receiver.last_name)`.as('receiverName'),
       })
       .from(messages)
-      .leftJoin(users, eq(messages.senderId, users.id))
+      .innerJoin(sql`users sender`, sql`${messages.senderId} = sender.id`)
+      .innerJoin(sql`users receiver`, sql`${messages.receiverId} = receiver.id`)
       .where(
-        or(eq(messages.senderId, userId), eq(messages.receiverId, userId))
+        sql`${messages.senderId} = ${userId} OR ${messages.receiverId} = ${userId}`
       )
-      .groupBy(users.id, messages.id)
       .orderBy(desc(messages.createdAt));
-
-    return conversations;
   }
 
-  async markMessageAsRead(messageId: number): Promise<void> {
-    // In development mode, just return without doing anything
-    if (process.env.NODE_ENV === 'development') {
-      return;
-    }
-    
-    // In production, you would update a read status field
-    // await db
-    //   .update(messages)
-    //   .set({ readAt: new Date() })
-    //   .where(eq(messages.id, messageId));
+  async markMessageAsRead(id: number): Promise<void> {
+    await db
+      .update(messages)
+      .set({ status: "read" })
+      .where(eq(messages.id, id));
   }
 
   // Progress operations
-  async createUserProgress(progress: InsertUserProgress): Promise<UserProgress> {
-    const [result] = await db.insert(userProgress).values(progress).returning();
-    return result;
+  async createOrUpdateProgress(progress: InsertUserProgress): Promise<UserProgress> {
+    const [existingProgress] = await db
+      .select()
+      .from(userProgress)
+      .where(
+        and(
+          eq(userProgress.userId, progress.userId),
+          eq(userProgress.resourceId, progress.resourceId)
+        )
+      );
+
+    if (existingProgress) {
+      const [updatedProgress] = await db
+        .update(userProgress)
+        .set({ ...progress, updatedAt: new Date() })
+        .where(eq(userProgress.id, existingProgress.id))
+        .returning();
+      return updatedProgress;
+    } else {
+      const [newProgress] = await db
+        .insert(userProgress)
+        .values(progress)
+        .returning();
+      return newProgress;
+    }
   }
 
   async getUserProgress(userId: string): Promise<UserProgress[]> {
@@ -280,29 +319,39 @@ class DatabaseStorage implements IStorage {
       .orderBy(desc(userProgress.updatedAt));
   }
 
-  async updateUserProgress(id: number, progress: Partial<InsertUserProgress>): Promise<UserProgress> {
-    const [result] = await db
-      .update(userProgress)
-      .set({ ...progress })
-      .where(eq(userProgress.id, id))
-      .returning();
-    return result;
+  async getProgressByResource(resourceId: number): Promise<UserProgress[]> {
+    return await db
+      .select()
+      .from(userProgress)
+      .where(eq(userProgress.resourceId, resourceId))
+      .orderBy(desc(userProgress.updatedAt));
   }
 
   // Analytics
-  async getSystemStats(): Promise<any> {
+  async getSystemStats(): Promise<{
+    totalUsers: number;
+    totalStudents: number;
+    totalCounsellors: number;
+    totalSessions: number;
+    totalResources: number;
+    completedSessions: number;
+  }> {
     const [totalUsers] = await db.select({ count: count() }).from(users);
+    const [totalStudents] = await db.select({ count: count() }).from(users).where(eq(users.role, "student"));
+    const [totalCounsellors] = await db.select({ count: count() }).from(users).where(eq(users.role, "counsellor"));
     const [totalSessions] = await db.select({ count: count() }).from(sessionsTable);
-    const [totalResources] = await db.select({ count: count() }).from(resources);
-    const [totalMessages] = await db.select({ count: count() }).from(messages);
+    const [totalResources] = await db.select({ count: count() }).from(resources).where(eq(resources.isActive, true));
+    const [completedSessions] = await db.select({ count: count() }).from(sessionsTable).where(eq(sessionsTable.status, "completed"));
 
     return {
-      users: totalUsers.count,
-      sessions: totalSessions.count,
-      resources: totalResources.count,
-      messages: totalMessages.count,
+      totalUsers: totalUsers.count,
+      totalStudents: totalStudents.count,
+      totalCounsellors: totalCounsellors.count,
+      totalSessions: totalSessions.count,
+      totalResources: totalResources.count,
+      completedSessions: completedSessions.count,
     };
   }
 }
 
-export const storage = useMemoryStorage ? memoryStorage : new DatabaseStorage();
+export const storage = new DatabaseStorage();

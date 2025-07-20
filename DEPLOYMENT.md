@@ -1,123 +1,293 @@
-# CollegeSafe AWS Deployment Guide
+# CollegeSafe Production Deployment Guide
 
-This guide explains how to deploy the CollegeSafe application to AWS using either AWS CodePipeline with EC2 or AWS Elastic Beanstalk.
+This guide covers deploying CollegeSafe to production using Docker Compose with Nginx reverse proxy and Amazon RDS.
 
-## Prerequisites
+## 🏗️ Architecture Overview
 
-1. AWS Account with appropriate permissions
-2. AWS CLI installed and configured
-3. Node.js 20.x installed locally
-4. Git repository set up
-
-## Option 1: AWS CodePipeline with EC2 Deployment
-
-### Step 1: Set Up AWS Infrastructure
-
-1. Deploy the CloudFormation template:
-```bash
-aws cloudformation create-stack \
-  --stack-name collegesafe-infrastructure \
-  --template-body file://cloudformation.yml \
-  --parameters ParameterKey=DBPassword,ParameterValue=your-secure-password \
-  --capabilities CAPABILITY_IAM
+```
+┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
+│   Nginx (80)    │───▶│  App (3001)     │───▶│  Amazon RDS     │
+│   Reverse Proxy │    │  Backend API    │    │  PostgreSQL     │
+└─────────────────┘    └─────────────────┘    └─────────────────┘
+         │                       │
+         ▼                       ▼
+┌─────────────────┐    ┌─────────────────┐
+│  Static Files   │    │  Redis (6379)   │
+│  Frontend       │    │  Sessions       │
+└─────────────────┘    └─────────────────┘
 ```
 
-2. Note the outputs (Database endpoint, EC2 public IP)
+## 📋 Prerequisites
 
-### Step 2: Set Up CodePipeline
+- Docker and Docker Compose installed
+- Amazon RDS PostgreSQL instance
+- Domain name (optional, for SSL)
+- Server with at least 2GB RAM and 20GB storage
 
-1. Create an AWS CodePipeline that connects to your repository
-2. Configure the pipeline stages:
-   - Source: Your Git repository
-   - Build: AWS CodeBuild (using buildspec.yml)
-   - Deploy: AWS CodeDeploy (using appspec.yml)
+## 🔧 Amazon RDS Setup
 
-### Step 3: Environment Variables
+### 1. Create RDS Instance
 
-Set up the following environment variables in AWS Systems Manager Parameter Store:
-- `DATABASE_URL`: PostgreSQL connection string
-- `NODE_ENV`: "production"
-- `PORT`: 3000
+1. Go to AWS RDS Console
+2. Create a PostgreSQL instance with these settings:
+   - **Engine**: PostgreSQL 14+
+   - **Instance**: db.t3.micro (for testing) or db.t3.small+ (for production)
+   - **Storage**: 20GB+ (General Purpose SSD)
+   - **Multi-AZ**: Enabled for production
+   - **Publicly accessible**: Yes (for initial setup)
+   - **VPC Security Group**: Allow port 5432 from your server IP
 
-### Step 4: Deploy
+### 2. Configure Security Group
 
-1. Push your code to the repository
-2. CodePipeline will automatically build and deploy
-3. Monitor the deployment in AWS Console
-
-## Option 2: AWS Elastic Beanstalk Deployment
-
-### Step 1: Create Elastic Beanstalk Application
-
-1. Create a new application in Elastic Beanstalk
-2. Choose Node.js platform
-3. Upload your application code
-4. Configure environment variables
-
-### Step 2: Database Setup
-
-1. Create RDS instance using CloudFormation template
-2. Configure security groups
-3. Update environment variables with database connection
-
-### Step 3: Deploy
-
-1. Package your application:
-```bash
-zip -r collegesafe.zip . -x "node_modules/*" ".git/*"
+Create a security group with these rules:
+```
+Type: PostgreSQL
+Protocol: TCP
+Port: 5432
+Source: Your server IP or 0.0.0.0/0 (for testing)
 ```
 
-2. Deploy using AWS Console or CLI:
+### 3. Get Connection Details
+
+Note down these details:
+- **Endpoint**: `your-instance.region.rds.amazonaws.com`
+- **Port**: 5432
+- **Database name**: `collegesafe`
+- **Username**: `postgres` (or your custom username)
+- **Password**: Your chosen password
+
+## 🚀 Deployment Steps
+
+### 1. Clone and Setup
+
 ```bash
-aws elasticbeanstalk create-application-version \
-  --application-name collegesafe \
-  --version-label v1 \
-  --source-bundle S3Bucket=your-bucket,S3Key=collegesafe.zip
+git clone <your-repo-url>
+cd collegesafe
 ```
 
-## Monitoring and Maintenance
+### 2. Configure Environment
 
-1. Set up CloudWatch alarms for:
-   - CPU utilization
-   - Memory usage
-   - Error rates
-   - Response times
+```bash
+# Copy example environment file
+cp env.example .env
 
-2. Configure log groups in CloudWatch Logs
+# Edit .env with your RDS details
+nano .env
+```
 
-3. Set up AWS X-Ray for tracing (optional)
+**Required .env variables:**
+```env
+# Database Configuration (Amazon RDS)
+DATABASE_URL=postgresql://username:password@your-rds-endpoint.amazonaws.com:5432/collegesafe
 
-## Security Considerations
+# Security (CHANGE THESE!)
+JWT_SECRET=your-super-secret-jwt-key-change-this-in-production-2024
+SESSION_SECRET=your-session-secret-key-change-this-in-production-2024
 
-1. Use AWS Secrets Manager for sensitive data
-2. Enable AWS WAF for web application firewall
-3. Set up AWS Shield for DDoS protection
-4. Configure SSL/TLS certificates using ACM
+# Server Configuration
+NODE_ENV=production
+PORT=3001
+HOST=0.0.0.0
+```
 
-## Backup and Recovery
+### 3. Deploy
 
-1. Enable automated RDS backups
-2. Configure backup retention period
-3. Test recovery procedures
+```bash
+# Option 1: Use deployment script (recommended)
+./scripts/deploy.sh
 
-## Scaling
+# Option 2: Manual deployment
+npm run build
+docker-compose up --build -d
+```
 
-1. Set up Auto Scaling groups
-2. Configure scaling policies based on metrics
-3. Use Application Load Balancer for distribution
+### 4. Verify Deployment
 
-## Troubleshooting
+```bash
+# Check service status
+docker-compose ps
 
-1. Check CloudWatch Logs
-2. Monitor application logs via PM2
-3. Review security group configurations
-4. Verify database connectivity
+# Check logs
+docker-compose logs -f
 
-## Cost Optimization
+# Health check
+curl http://localhost/health
 
-1. Use t2.micro/t3.micro instances for development
-2. Enable auto-scaling based on demand
-3. Monitor AWS Cost Explorer
-4. Set up budget alerts
+# Test application
+curl http://localhost
+```
 
-For additional support or questions, refer to AWS documentation or contact your AWS support team. 
+## 🔒 SSL/HTTPS Setup (Optional)
+
+### 1. Using Let's Encrypt
+
+```bash
+# Install certbot
+sudo apt-get update
+sudo apt-get install certbot
+
+# Get SSL certificate
+sudo certbot certonly --standalone -d yourdomain.com
+
+# Copy certificates to nginx/ssl/
+sudo cp /etc/letsencrypt/live/yourdomain.com/fullchain.pem nginx/ssl/
+sudo cp /etc/letsencrypt/live/yourdomain.com/privkey.pem nginx/ssl/
+```
+
+### 2. Update Nginx Configuration
+
+Uncomment SSL configuration in `nginx/nginx.conf`:
+```nginx
+server {
+    listen 443 ssl http2;
+    ssl_certificate /etc/nginx/ssl/fullchain.pem;
+    ssl_certificate_key /etc/nginx/ssl/privkey.pem;
+    # ... rest of SSL config
+}
+```
+
+## 📊 Monitoring and Maintenance
+
+### Health Checks
+
+```bash
+# Application health
+curl http://localhost/health
+
+# Database connection
+docker-compose exec app node -e "require('./dist/db').checkDatabaseConnection().then(console.log)"
+
+# Service status
+docker-compose ps
+```
+
+### Logs
+
+```bash
+# All services
+docker-compose logs -f
+
+# Specific service
+docker-compose logs -f app
+docker-compose logs -f nginx
+
+# Nginx access logs
+tail -f nginx/logs/access.log
+```
+
+### Backup
+
+```bash
+# Database backup
+docker-compose exec app pg_dump $DATABASE_URL > backup_$(date +%Y%m%d_%H%M%S).sql
+
+# Application backup
+tar -czf collegesafe_backup_$(date +%Y%m%d_%H%M%S).tar.gz \
+  --exclude=node_modules \
+  --exclude=.git \
+  --exclude=dist \
+  .
+```
+
+### Updates
+
+```bash
+# Pull latest code
+git pull origin main
+
+# Rebuild and restart
+docker-compose down
+docker-compose up --build -d
+
+# Or use deployment script
+./scripts/deploy.sh
+```
+
+## 🛠️ Troubleshooting
+
+### Common Issues
+
+1. **Database Connection Failed**
+   ```bash
+   # Check RDS security group
+   # Verify DATABASE_URL in .env
+   # Test connection manually
+   psql $DATABASE_URL
+   ```
+
+2. **Port Already in Use**
+   ```bash
+   # Check what's using port 80
+   sudo lsof -i :80
+   
+   # Stop conflicting service
+   sudo systemctl stop nginx
+   ```
+
+3. **Permission Denied**
+   ```bash
+   # Fix file permissions
+   chmod +x scripts/deploy.sh
+   chmod 755 uploads/
+   ```
+
+4. **Container Won't Start**
+   ```bash
+   # Check logs
+   docker-compose logs app
+   
+   # Check environment variables
+   docker-compose exec app env | grep DATABASE
+   ```
+
+### Performance Tuning
+
+1. **Database Connection Pool**
+   ```env
+   DB_POOL_MAX=50
+   DB_POOL_MIN=5
+   ```
+
+2. **Nginx Worker Processes**
+   ```nginx
+   worker_processes auto;
+   worker_connections 1024;
+   ```
+
+3. **Node.js Memory**
+   ```bash
+   # Add to Dockerfile
+   ENV NODE_OPTIONS="--max-old-space-size=2048"
+   ```
+
+## 🔐 Security Checklist
+
+- [ ] Changed default JWT_SECRET
+- [ ] Changed default SESSION_SECRET
+- [ ] Configured RDS security group
+- [ ] Enabled SSL/HTTPS
+- [ ] Set up firewall rules
+- [ ] Configured rate limiting
+- [ ] Enabled CORS properly
+- [ ] Set up monitoring
+- [ ] Configured backups
+- [ ] Updated dependencies
+
+## 📞 Support
+
+For issues or questions:
+1. Check logs: `docker-compose logs -f`
+2. Verify configuration: `docker-compose config`
+3. Test connectivity: `curl http://localhost/health`
+4. Check AWS RDS console for database issues
+
+## 🎯 Production Checklist
+
+- [ ] Environment variables configured
+- [ ] Database migrations run
+- [ ] SSL certificates installed
+- [ ] Monitoring configured
+- [ ] Backup strategy implemented
+- [ ] Security groups configured
+- [ ] Load testing completed
+- [ ] Documentation updated 

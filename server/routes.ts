@@ -1,256 +1,425 @@
-import type { Express, Request, Response, NextFunction } from "express";
+import type { Express } from "express";
 import { createServer, type Server } from "http";
-import cookieParser from "cookie-parser";
 import { storage } from "./storage";
-import { authService, loginSchema, registerSchema } from "./auth";
 import { insertResourceSchema, insertSessionSchema, insertMessageSchema } from "@shared/schema";
 import { z } from "zod";
-import { randomBytes } from "crypto";
-
-// CSRF token middleware - fixed version
-const csrfProtection = (req: Request, res: Response, next: NextFunction) => {
-  // Skip CSRF for development and specific endpoints
-  if (process.env.NODE_ENV === 'development' || 
-      req.path === '/health' || 
-      req.path === '/api/login' ||
-      req.path === '/api/register') {
-    return next();
-  }
-  
-  if (req.method === 'GET') {
-    // Generate new CSRF token for GET requests
-    const token = randomBytes(32).toString('hex');
-    res.cookie('XSRF-TOKEN', token, {
-      httpOnly: false,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'strict'
-    });
-    return next();
-  }
-
-  // Verify CSRF token for non-GET requests
-  const token = req.cookies && req.cookies['XSRF-TOKEN'];
-  const headerToken = req.headers['x-xsrf-token'] as string;
-
-  if (!token || !headerToken || token !== headerToken) {
-    console.log('CSRF validation failed:', { token: !!token, headerToken: !!headerToken });
-    return res.status(403).json({ message: 'Invalid CSRF token' });
-  }
-
-  next();
-};
-
-// Authentication middleware
-const isAuthenticated = async (req: Request, res: Response, next: NextFunction) => {
-  const token = req.headers.authorization?.replace('Bearer ', '');
-  
-  if (!token) {
-    return res.status(401).json({ message: 'No token provided' });
-  }
-
-  try {
-    const user = await authService.validateSession(token);
-    if (!user) {
-      return res.status(401).json({ message: 'Invalid or expired token' });
-    }
-
-    req.user = user;
-    next();
-  } catch (error) {
-    console.error('Authentication error:', error);
-    res.status(401).json({ message: 'Authentication failed' });
-  }
-};
 
 export async function registerRoutes(app: Express): Promise<Server> {
-  const server = createServer(app);
+  // Session storage
+const sessions = new Map<string, string>(); // sessionId -> userId
 
-  // Add cookie parser middleware FIRST
-  app.use(cookieParser());
+  // Simple auth middleware
+  const isAuthenticated = (req: any, res: any, next: any) => {
+    const sessionId = req.headers.authorization?.replace('Bearer ', '');
+    
+    if (sessionId && sessions.has(sessionId)) {
+      req.user = {
+        claims: { sub: sessions.get(sessionId) }
+      };
+      return next();
+    }
+    
+    return res.status(401).json({ message: 'Unauthorized' });
+  };
 
-  // Health check endpoint (before any other middleware)
-  app.get('/health', async (req, res) => {
+  // Login route
+  app.post('/api/login', async (req: any, res) => {
     try {
-      const dbHealthy = await storage.getSystemStats();
+      const { email, password } = req.body;
       
-      res.status(200).json({
-        status: 'healthy',
-        timestamp: new Date().toISOString(),
-        version: process.env.npm_package_version || '1.0.0',
-        environment: process.env.NODE_ENV || 'development',
-        database: {
-          connected: true,
-          stats: dbHealthy
+      // Validate required fields
+      if (!email || !password) {
+        return res.status(400).json({ message: 'Email and password are required' });
+      }
+      
+      // Find user by email
+      const user = await storage.getUserByEmail(email);
+      
+      if (!user) {
+        return res.status(401).json({ message: 'Invalid credentials' });
+      }
+      
+      // TODO: In production, implement proper password hashing and verification
+      // For now, we'll accept any password for the demo
+      // In production, you should use bcrypt or similar to hash/verify passwords
+      
+      // Create session
+      const sessionId = `session-${Date.now()}-${Math.random()}`;
+      sessions.set(sessionId, user.id);
+      
+      res.json({ 
+        user, 
+        token: sessionId,
+        message: 'Login successful'
+      });
+    } catch (error) {
+      console.error("Login error:", error);
+      res.status(500).json({ message: "Login failed" });
+    }
+  });
+
+  // Signup route
+  app.post('/api/signup', async (req: any, res) => {
+    try {
+      const { email, password, firstName, lastName, role } = req.body;
+      
+      // Validate required fields
+      if (!email || !password || !firstName || !lastName || !role) {
+        return res.status(400).json({ message: 'All fields are required' });
+      }
+      
+      // Check if user already exists
+      const existingUser = await storage.getUserByEmail(email);
+      if (existingUser) {
+        return res.status(409).json({ message: 'User with this email already exists' });
+      }
+      
+      // Create new user
+      const userId = `user-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+      const newUser = {
+        id: userId,
+        email,
+        firstName,
+        lastName,
+        role: role as any,
+      };
+      
+      const user = await storage.upsertUser(newUser);
+      
+      res.status(201).json({ 
+        message: 'User created successfully',
+        user: {
+          id: user.id,
+          email: user.email,
+          firstName: user.firstName,
+          lastName: user.lastName,
+          role: user.role
         }
       });
     } catch (error) {
-      console.error('Health check failed:', error);
-      res.status(503).json({
-        status: 'unhealthy',
-        timestamp: new Date().toISOString(),
-        error: error instanceof Error ? error.message : 'Unknown error'
-      });
+      console.error("Signup error:", error);
+      res.status(500).json({ message: "Failed to create user" });
     }
   });
 
-  // CSRF protection for non-auth routes
-  app.use((req, res, next) => {
-    if (req.path.startsWith('/api') && 
-        req.path !== '/api/login' && 
-        req.path !== '/api/register') {
-      return csrfProtection(req, res, next);
+  // Logout route
+  app.post('/api/logout', (req: any, res) => {
+    const sessionId = req.headers.authorization?.replace('Bearer ', '');
+    if (sessionId) {
+      sessions.delete(sessionId);
     }
-    next();
+    // Clear any stored tokens
+    res.json({ message: 'Logged out successfully' });
   });
 
-  // Auth routes (no CSRF protection for easier testing)
-  app.post('/api/register', async (req, res) => {
+  // Auth routes
+  app.get('/api/auth/user', isAuthenticated, async (req: any, res) => {
     try {
-      const input = registerSchema.parse(req.body);
-      const user = await authService.register(input);
-      res.json({ user, message: 'Registration successful' });
+      const userId = req.user.claims.sub;
+      const user = await storage.getUser(userId);
+      res.json(user);
     } catch (error) {
-      if (error instanceof z.ZodError) {
-        return res.status(400).json({ message: 'Invalid input', errors: error.errors });
-      }
-      console.error('Registration error:', error);
-      res.status(500).json({ message: error instanceof Error ? error.message : 'Registration failed' });
+      console.error("Error fetching user:", error);
+      res.status(500).json({ message: "Failed to fetch user" });
     }
   });
 
-  app.post('/api/login', async (req, res) => {
-    try {
-      console.log('Login attempt for:', req.body.email);
-      const input = loginSchema.parse(req.body);
-      const { user, token } = await authService.login(input);
-      
-      // Set CSRF token for authenticated user
-      const csrfToken = randomBytes(32).toString('hex');
-      res.cookie('XSRF-TOKEN', csrfToken, {
-        httpOnly: false,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: 'strict'
-      });
-      
-      res.json({ user, token, message: 'Login successful' });
-    } catch (error) {
-      if (error instanceof z.ZodError) {
-        return res.status(400).json({ message: 'Invalid input', errors: error.errors });
-      }
-      console.error('Login error:', error);
-      res.status(401).json({ message: error instanceof Error ? error.message : 'Login failed' });
-    }
-  });
 
-  app.post('/api/logout', isAuthenticated, async (req, res) => {
-    try {
-      const token = req.headers.authorization?.replace('Bearer ', '');
-      if (token) {
-        authService.logout(token);
-      }
-      res.clearCookie('XSRF-TOKEN');
-      res.json({ message: 'Logout successful' });
-    } catch (error) {
-      console.error('Logout error:', error);
-      res.status(500).json({ message: 'Logout failed' });
-    }
-  });
 
-  // Protected routes
-  app.get('/api/users', isAuthenticated, async (req, res) => {
+  // User routes
+  app.get('/api/users', isAuthenticated, async (req: any, res) => {
     try {
-      const users = await storage.getUsers();
+      const currentUser = await storage.getUser(req.user.claims.sub);
+      if (currentUser?.role !== 'admin') {
+        return res.status(403).json({ message: "Access denied" });
+      }
+      const users = await storage.getAllUsers();
       res.json(users);
     } catch (error) {
-      console.error('Get users error:', error);
-      res.status(500).json({ message: 'Failed to fetch users' });
+      console.error("Error fetching users:", error);
+      res.status(500).json({ message: "Failed to fetch users" });
     }
   });
 
-  app.get('/api/analytics/stats', async (req, res) => {
+  app.get('/api/users/role/:role', isAuthenticated, async (req: any, res) => {
     try {
+      const users = await storage.getUsersByRole(req.params.role);
+      res.json(users);
+    } catch (error) {
+      console.error("Error fetching users by role:", error);
+      res.status(500).json({ message: "Failed to fetch users" });
+    }
+  });
+
+  app.patch('/api/users/:id/role', isAuthenticated, async (req: any, res) => {
+    try {
+      const currentUser = await storage.getUser(req.user.claims.sub);
+      if (currentUser?.role !== 'admin') {
+        return res.status(403).json({ message: "Access denied" });
+      }
+      const { role } = req.body;
+      const user = await storage.updateUserRole(req.params.id, role);
+      res.json(user);
+    } catch (error) {
+      console.error("Error updating user role:", error);
+      res.status(500).json({ message: "Failed to update user role" });
+    }
+  });
+
+  // Resource routes
+  app.post('/api/resources', isAuthenticated, async (req: any, res) => {
+    try {
+      const currentUser = await storage.getUser(req.user.claims.sub);
+      if (currentUser?.role !== 'counsellor' && currentUser?.role !== 'admin') {
+        return res.status(403).json({ message: "Access denied" });
+      }
+      
+      const resourceData = insertResourceSchema.parse({
+        ...req.body,
+        uploadedBy: req.user.claims.sub,
+      });
+      
+      const resource = await storage.createResource(resourceData);
+      res.json(resource);
+    } catch (error) {
+      console.error("Error creating resource:", error);
+      res.status(500).json({ message: "Failed to create resource" });
+    }
+  });
+
+  app.get('/api/resources', isAuthenticated, async (req: any, res) => {
+    try {
+      const { type } = req.query;
+      const resources = type 
+        ? await storage.getResourcesByType(type as string)
+        : await storage.getResources();
+      res.json(resources);
+    } catch (error) {
+      console.error("Error fetching resources:", error);
+      res.status(500).json({ message: "Failed to fetch resources" });
+    }
+  });
+
+  app.get('/api/resources/:id', isAuthenticated, async (req: any, res) => {
+    try {
+      const resource = await storage.getResourceById(parseInt(req.params.id));
+      if (!resource) {
+        return res.status(404).json({ message: "Resource not found" });
+      }
+      res.json(resource);
+    } catch (error) {
+      console.error("Error fetching resource:", error);
+      res.status(500).json({ message: "Failed to fetch resource" });
+    }
+  });
+
+  app.patch('/api/resources/:id', isAuthenticated, async (req: any, res) => {
+    try {
+      const currentUser = await storage.getUser(req.user.claims.sub);
+      if (currentUser?.role !== 'counsellor' && currentUser?.role !== 'admin') {
+        return res.status(403).json({ message: "Access denied" });
+      }
+      
+      const resource = await storage.updateResource(parseInt(req.params.id), req.body);
+      res.json(resource);
+    } catch (error) {
+      console.error("Error updating resource:", error);
+      res.status(500).json({ message: "Failed to update resource" });
+    }
+  });
+
+  app.delete('/api/resources/:id', isAuthenticated, async (req: any, res) => {
+    try {
+      const currentUser = await storage.getUser(req.user.claims.sub);
+      if (currentUser?.role !== 'counsellor' && currentUser?.role !== 'admin') {
+        return res.status(403).json({ message: "Access denied" });
+      }
+      
+      await storage.deleteResource(parseInt(req.params.id));
+      res.json({ message: "Resource deleted successfully" });
+    } catch (error) {
+      console.error("Error deleting resource:", error);
+      res.status(500).json({ message: "Failed to delete resource" });
+    }
+  });
+
+  // Session routes
+  app.post('/api/sessions', isAuthenticated, async (req: any, res) => {
+    try {
+      const currentUser = await storage.getUser(req.user.claims.sub);
+      if (currentUser?.role !== 'student') {
+        return res.status(403).json({ message: "Only students can book sessions" });
+      }
+      
+      const sessionData = insertSessionSchema.parse({
+        ...req.body,
+        studentId: req.user.claims.sub,
+      });
+      
+      const session = await storage.createSession(sessionData);
+      res.json(session);
+    } catch (error) {
+      console.error("Error creating session:", error);
+      res.status(500).json({ message: "Failed to create session" });
+    }
+  });
+
+  app.get('/api/sessions/student', isAuthenticated, async (req: any, res) => {
+    try {
+      const sessions = await storage.getSessionsByStudent(req.user.claims.sub);
+      res.json(sessions);
+    } catch (error) {
+      console.error("Error fetching student sessions:", error);
+      res.status(500).json({ message: "Failed to fetch sessions" });
+    }
+  });
+
+  app.get('/api/sessions/counsellor', isAuthenticated, async (req: any, res) => {
+    try {
+      const currentUser = await storage.getUser(req.user.claims.sub);
+      if (currentUser?.role !== 'counsellor') {
+        return res.status(403).json({ message: "Access denied" });
+      }
+      
+      const sessions = await storage.getSessionsByCounsellor(req.user.claims.sub);
+      res.json(sessions);
+    } catch (error) {
+      console.error("Error fetching counsellor sessions:", error);
+      res.status(500).json({ message: "Failed to fetch sessions" });
+    }
+  });
+
+  app.get('/api/sessions/pending', isAuthenticated, async (req: any, res) => {
+    try {
+      const currentUser = await storage.getUser(req.user.claims.sub);
+      if (currentUser?.role !== 'counsellor' && currentUser?.role !== 'admin') {
+        return res.status(403).json({ message: "Access denied" });
+      }
+      
+      const sessions = await storage.getPendingSessions();
+      res.json(sessions);
+    } catch (error) {
+      console.error("Error fetching pending sessions:", error);
+      res.status(500).json({ message: "Failed to fetch pending sessions" });
+    }
+  });
+
+  app.get('/api/sessions/all', isAuthenticated, async (req: any, res) => {
+    try {
+      const currentUser = await storage.getUser(req.user.claims.sub);
+      if (currentUser?.role !== 'admin') {
+        return res.status(403).json({ message: "Access denied" });
+      }
+      
+      const sessions = await storage.getSessionsWithUsers();
+      res.json(sessions);
+    } catch (error) {
+      console.error("Error fetching all sessions:", error);
+      res.status(500).json({ message: "Failed to fetch sessions" });
+    }
+  });
+
+  app.patch('/api/sessions/:id', isAuthenticated, async (req: any, res) => {
+    try {
+      const session = await storage.updateSession(parseInt(req.params.id), req.body);
+      res.json(session);
+    } catch (error) {
+      console.error("Error updating session:", error);
+      res.status(500).json({ message: "Failed to update session" });
+    }
+  });
+
+  // Message routes
+  app.post('/api/messages', isAuthenticated, async (req: any, res) => {
+    try {
+      const messageData = insertMessageSchema.parse({
+        ...req.body,
+        senderId: req.user.claims.sub,
+      });
+      
+      const message = await storage.createMessage(messageData);
+      res.json(message);
+    } catch (error) {
+      console.error("Error creating message:", error);
+      res.status(500).json({ message: "Failed to create message" });
+    }
+  });
+
+  app.get('/api/messages/conversations', isAuthenticated, async (req: any, res) => {
+    try {
+      const conversations = await storage.getConversations(req.user.claims.sub);
+      res.json(conversations);
+    } catch (error) {
+      console.error("Error fetching conversations:", error);
+      res.status(500).json({ message: "Failed to fetch conversations" });
+    }
+  });
+
+  app.get('/api/messages/:userId', isAuthenticated, async (req: any, res) => {
+    try {
+      const messages = await storage.getMessagesBetweenUsers(
+        req.user.claims.sub,
+        req.params.userId
+      );
+      res.json(messages);
+    } catch (error) {
+      console.error("Error fetching messages:", error);
+      res.status(500).json({ message: "Failed to fetch messages" });
+    }
+  });
+
+  app.patch('/api/messages/:id/read', isAuthenticated, async (req: any, res) => {
+    try {
+      await storage.markMessageAsRead(parseInt(req.params.id));
+      res.json({ message: "Message marked as read" });
+    } catch (error) {
+      console.error("Error marking message as read:", error);
+      res.status(500).json({ message: "Failed to mark message as read" });
+    }
+  });
+
+  // Progress routes
+  app.post('/api/progress', isAuthenticated, async (req: any, res) => {
+    try {
+      const progressData = {
+        ...req.body,
+        userId: req.user.claims.sub,
+      };
+      
+      const progress = await storage.createOrUpdateProgress(progressData);
+      res.json(progress);
+    } catch (error) {
+      console.error("Error updating progress:", error);
+      res.status(500).json({ message: "Failed to update progress" });
+    }
+  });
+
+  app.get('/api/progress', isAuthenticated, async (req: any, res) => {
+    try {
+      const progress = await storage.getUserProgress(req.user.claims.sub);
+      res.json(progress);
+    } catch (error) {
+      console.error("Error fetching progress:", error);
+      res.status(500).json({ message: "Failed to fetch progress" });
+    }
+  });
+
+  // Analytics routes
+  app.get('/api/analytics/stats', isAuthenticated, async (req: any, res) => {
+    try {
+      const currentUser = await storage.getUser(req.user.claims.sub);
+      if (currentUser?.role !== 'admin') {
+        return res.status(403).json({ message: "Access denied" });
+      }
+      
       const stats = await storage.getSystemStats();
       res.json(stats);
     } catch (error) {
-      console.error('Get analytics error:', error);
-      res.status(500).json({ message: 'Failed to fetch analytics' });
+      console.error("Error fetching analytics:", error);
+      res.status(500).json({ message: "Failed to fetch analytics" });
     }
   });
 
-  // Resources routes (public access for now)
-  app.get('/api/resources', async (req, res) => {
-    try {
-      const resources = await storage.getResources();
-      res.json(resources);
-    } catch (error) {
-      console.error('Get resources error:', error);
-      res.status(500).json({ message: 'Failed to fetch resources' });
-    }
-  });
-
-  app.post('/api/resources', isAuthenticated, async (req, res) => {
-    try {
-      const input = insertResourceSchema.parse(req.body);
-      const resource = await storage.createResource(input);
-      res.status(201).json(resource);
-    } catch (error) {
-      if (error instanceof z.ZodError) {
-        return res.status(400).json({ message: 'Invalid input', errors: error.errors });
-      }
-      console.error('Create resource error:', error);
-      res.status(500).json({ message: 'Failed to create resource' });
-    }
-  });
-
-  // Sessions routes
-  app.get('/api/sessions', async (req, res) => {
-    try {
-      const sessions = await storage.getSessions();
-      res.json(sessions);
-    } catch (error) {
-      console.error('Get sessions error:', error);
-      res.status(500).json({ message: 'Failed to fetch sessions' });
-    }
-  });
-
-  app.post('/api/sessions', isAuthenticated, async (req, res) => {
-    try {
-      const input = insertSessionSchema.parse(req.body);
-      const session = await storage.createSession(input);
-      res.status(201).json(session);
-    } catch (error) {
-      if (error instanceof z.ZodError) {
-        return res.status(400).json({ message: 'Invalid input', errors: error.errors });
-      }
-      console.error('Create session error:', error);
-      res.status(500).json({ message: 'Failed to create session' });
-    }
-  });
-
-  // Messages routes
-  app.get('/api/messages', async (req, res) => {
-    try {
-      const messages = await storage.getMessages();
-      res.json(messages);
-    } catch (error) {
-      console.error('Get messages error:', error);
-      res.status(500).json({ message: 'Failed to fetch messages' });
-    }
-  });
-
-  app.post('/api/messages', isAuthenticated, async (req, res) => {
-    try {
-      const input = insertMessageSchema.parse(req.body);
-      const message = await storage.createMessage(input);
-      res.status(201).json(message);
-    } catch (error) {
-      if (error instanceof z.ZodError) {
-        return res.status(400).json({ message: 'Invalid input', errors: error.errors });
-      }
-      console.error('Create message error:', error);
-      res.status(500).json({ message: 'Failed to create message' });
-    }
-  });
-
-  return server;
+  const httpServer = createServer(app);
+  return httpServer;
 }

@@ -4,24 +4,26 @@ import * as schema from '@shared/schema';
 
 // Validate database URL
 if (!process.env.DATABASE_URL) {
-  if (process.env.NODE_ENV === 'production') {
-    throw new Error('DATABASE_URL is required in production');
-  }
-  console.warn('⚠️  DATABASE_URL not set, using mock database for development');
+  throw new Error('DATABASE_URL environment variable is required');
 }
 
-const databaseUrl = process.env.DATABASE_URL || 'postgresql://mock:mock@localhost:5432/mock';
+const databaseUrl = process.env.DATABASE_URL;
 
-// Configure connection pool
+// Configure connection pool for production
 const poolConfig = {
   connectionString: databaseUrl,
-  max: process.env.NODE_ENV === 'production' ? 20 : 5,
-  idleTimeoutMillis: 30000,
-  connectionTimeoutMillis: 2000,
-  ssl: process.env.NODE_ENV === 'production' && process.env.DATABASE_URL?.includes('ssl=true') ? {
-    rejectUnauthorized: true,
-    ca: process.env.DATABASE_CA_CERT,
+  max: parseInt(process.env.DB_POOL_MAX || '20'),
+  min: parseInt(process.env.DB_POOL_MIN || '2'),
+  idleTimeoutMillis: parseInt(process.env.DB_IDLE_TIMEOUT || '30000'),
+  connectionTimeoutMillis: parseInt(process.env.DB_CONNECTION_TIMEOUT || '2000'),
+  ssl: process.env.NODE_ENV === 'production' ? {
+    rejectUnauthorized: process.env.DB_SSL_REJECT_UNAUTHORIZED !== 'false',
+    ca: process.env.DATABASE_CA_CERT || undefined,
   } : false,
+  // Additional RDS-specific settings
+  application_name: 'collegesafe-app',
+  statement_timeout: parseInt(process.env.DB_STATEMENT_TIMEOUT || '30000'),
+  query_timeout: parseInt(process.env.DB_QUERY_TIMEOUT || '30000'),
 };
 
 // Create connection pool with error handling
@@ -33,6 +35,19 @@ pool.on('error', (err) => {
   if (process.env.NODE_ENV === 'production') {
     process.exit(-1);
   }
+});
+
+// Handle pool connection events
+pool.on('connect', (client) => {
+  console.log('New database connection established');
+});
+
+pool.on('acquire', (client) => {
+  console.log('Client acquired from pool');
+});
+
+pool.on('release', (client) => {
+  console.log('Client released back to pool');
 });
 
 // Create Drizzle instance
@@ -57,6 +72,18 @@ export async function checkDatabaseConnection(): Promise<boolean> {
 // Graceful shutdown
 process.on('SIGTERM', async () => {
   console.log('Received SIGTERM. Closing database pool...');
+  try {
+    await pool.end();
+    console.log('Database pool closed.');
+    process.exit(0);
+  } catch (error) {
+    console.error('Error closing database pool:', error);
+    process.exit(1);
+  }
+});
+
+process.on('SIGINT', async () => {
+  console.log('Received SIGINT. Closing database pool...');
   try {
     await pool.end();
     console.log('Database pool closed.');

@@ -45,94 +45,91 @@ export const messageStatusEnum = pgEnum("message_status", ["sent", "read"]);
 // User storage table.
 export const users = pgTable("users", {
   id: varchar("id").primaryKey().notNull(),
-  email: varchar("email").unique().notNull(),
+  email: varchar("email").unique(),
   firstName: varchar("first_name"),
   lastName: varchar("last_name"),
   profileImageUrl: varchar("profile_image_url"),
   role: roleEnum("role").notNull().default("student"),
-  passwordHash: varchar("password_hash").notNull(),
-  passwordSalt: varchar("password_salt").notNull(),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
-}, (table) => ({
-  emailIdx: index("email_idx").on(table.email),
-  roleIdx: index("role_idx").on(table.role),
-}));
+});
 
 // CBT Resources table
 export const resources = pgTable("resources", {
   id: serial("id").primaryKey(),
   title: varchar("title").notNull(),
   description: text("description"),
-  type: varchar("type").notNull(),
-  url: varchar("url").notNull(),
-  createdBy: varchar("created_by").references(() => users.id),
+  type: resourceTypeEnum("type").notNull(),
+  fileUrl: varchar("file_url"),
+  duration: integer("duration"), // in minutes
+  uploadedBy: varchar("uploaded_by")
+    .references(() => users.id)
+    .notNull(),
+  isActive: boolean("is_active").default(true),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
-}, (table) => ({
-  typeIdx: index("type_idx").on(table.type),
-  createdByIdx: index("created_by_idx").on(table.createdBy),
-}));
+});
 
 // Sessions table
-export const sessionsTable = pgTable("counselling_sessions", {
+export const sessionsTable = pgTable("sessions_table", {
   id: serial("id").primaryKey(),
-  studentId: varchar("student_id").references(() => users.id).notNull(),
-  counsellorId: varchar("counsellor_id").references(() => users.id).notNull(),
-  status: varchar("status").notNull().default("pending"),
+  studentId: varchar("student_id")
+    .references(() => users.id)
+    .notNull(),
+  counsellorId: varchar("counsellor_id")
+    .references(() => users.id)
+    .notNull(),
   scheduledAt: timestamp("scheduled_at").notNull(),
+  status: sessionStatusEnum("status").notNull().default("pending"),
+  type: sessionTypeEnum("type").notNull().default("individual"),
   notes: text("notes"),
+  studentNotes: text("student_notes"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
-}, (table) => ({
-  studentIdx: index("student_idx").on(table.studentId),
-  counsellorIdx: index("counsellor_idx").on(table.counsellorId),
-  statusIdx: index("status_idx").on(table.status),
-  scheduledAtIdx: index("scheduled_at_idx").on(table.scheduledAt),
-}));
+});
 
 // Messages table
 export const messages = pgTable("messages", {
   id: serial("id").primaryKey(),
-  senderId: varchar("sender_id").references(() => users.id).notNull(),
-  receiverId: varchar("receiver_id").references(() => users.id).notNull(),
+  senderId: varchar("sender_id")
+    .references(() => users.id)
+    .notNull(),
+  receiverId: varchar("receiver_id")
+    .references(() => users.id)
+    .notNull(),
   content: text("content").notNull(),
+  status: messageStatusEnum("status").notNull().default("sent"),
   createdAt: timestamp("created_at").defaultNow(),
-}, (table) => ({
-  senderIdx: index("sender_idx").on(table.senderId),
-  receiverIdx: index("receiver_idx").on(table.receiverId),
-  createdAtIdx: index("messages_created_at_idx").on(table.createdAt),
-}));
+});
 
 // User progress tracking
 export const userProgress = pgTable("user_progress", {
   id: serial("id").primaryKey(),
-  userId: varchar("user_id").references(() => users.id).notNull(),
-  resourceId: integer("resource_id").references(() => resources.id).notNull(),
-  progress: integer("progress").notNull().default(0),
-  completed: boolean("completed").notNull().default(false),
-  lastAccessedAt: timestamp("last_accessed_at").defaultNow(),
+  userId: varchar("user_id")
+    .references(() => users.id)
+    .notNull(),
+  resourceId: integer("resource_id")
+    .references(() => resources.id)
+    .notNull(),
+  progress: integer("progress").default(0), // percentage
+  completedAt: timestamp("completed_at"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
-}, (table) => ({
-  userIdx: index("progress_user_idx").on(table.userId),
-  resourceIdx: index("progress_resource_idx").on(table.resourceId),
-  completedIdx: index("completed_idx").on(table.completed),
-}));
+});
 
 // Relations
 export const usersRelations = relations(users, ({ many }) => ({
-  createdResources: many(resources),
-  studentSessions: many(sessionsTable, { relationName: "student_sessions" }),
-  counsellorSessions: many(sessionsTable, { relationName: "counsellor_sessions" }),
-  sentMessages: many(messages, { relationName: "sent_messages" }),
-  receivedMessages: many(messages, { relationName: "received_messages" }),
+  uploadedResources: many(resources),
+  studentSessions: many(sessionsTable, { relationName: "studentSessions" }),
+  counsellorSessions: many(sessionsTable, { relationName: "counsellorSessions" }),
+  sentMessages: many(messages, { relationName: "sentMessages" }),
+  receivedMessages: many(messages, { relationName: "receivedMessages" }),
   progress: many(userProgress),
 }));
 
 export const resourcesRelations = relations(resources, ({ one, many }) => ({
-  creator: one(users, {
-    fields: [resources.createdBy],
+  uploadedBy: one(users, {
+    fields: [resources.uploadedBy],
     references: [users.id],
   }),
   progress: many(userProgress),
@@ -142,12 +139,12 @@ export const sessionsRelations = relations(sessionsTable, ({ one }) => ({
   student: one(users, {
     fields: [sessionsTable.studentId],
     references: [users.id],
-    relationName: "student_sessions",
+    relationName: "studentSessions",
   }),
   counsellor: one(users, {
     fields: [sessionsTable.counsellorId],
     references: [users.id],
-    relationName: "counsellor_sessions",
+    relationName: "counsellorSessions",
   }),
 }));
 
@@ -155,12 +152,12 @@ export const messagesRelations = relations(messages, ({ one }) => ({
   sender: one(users, {
     fields: [messages.senderId],
     references: [users.id],
-    relationName: "sent_messages",
+    relationName: "sentMessages",
   }),
   receiver: one(users, {
     fields: [messages.receiverId],
     references: [users.id],
-    relationName: "received_messages",
+    relationName: "receivedMessages",
   }),
 }));
 
@@ -176,19 +173,41 @@ export const userProgressRelations = relations(userProgress, ({ one }) => ({
 }));
 
 // Schema types
-export type User = typeof users.$inferSelect;
 export type UpsertUser = typeof users.$inferInsert;
-export type Resource = typeof resources.$inferSelect;
+export type User = typeof users.$inferSelect;
+
 export type InsertResource = typeof resources.$inferInsert;
-export type Session = typeof sessionsTable.$inferSelect;
+export type Resource = typeof resources.$inferSelect;
+
 export type InsertSession = typeof sessionsTable.$inferInsert;
-export type Message = typeof messages.$inferSelect;
+export type Session = typeof sessionsTable.$inferSelect;
+
 export type InsertMessage = typeof messages.$inferInsert;
-export type UserProgress = typeof userProgress.$inferSelect;
+export type Message = typeof messages.$inferSelect;
+
 export type InsertUserProgress = typeof userProgress.$inferInsert;
+export type UserProgress = typeof userProgress.$inferSelect;
 
 // Insert schemas
-export const insertResourceSchema = createInsertSchema(resources);
-export const insertSessionSchema = createInsertSchema(sessionsTable);
-export const insertMessageSchema = createInsertSchema(messages);
-export const insertUserProgressSchema = createInsertSchema(userProgress);
+export const insertResourceSchema = createInsertSchema(resources).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertSessionSchema = createInsertSchema(sessionsTable).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertMessageSchema = createInsertSchema(messages).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertUserProgressSchema = createInsertSchema(userProgress).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
