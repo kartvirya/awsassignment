@@ -1,33 +1,42 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
+import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Heart, Mail, Lock, User, UserCheck } from "lucide-react";
+import { Heart, Mail, Lock, User, Phone } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 export default function Signup() {
   const [formData, setFormData] = useState({
+    firstName: "",
+    lastName: "",
     email: "",
     password: "",
     confirmPassword: "",
-    firstName: "",
-    lastName: "",
+    phone: "",
     role: "student"
   });
   const [isLoading, setIsLoading] = useState(false);
   const [, navigate] = useLocation();
   const { toast } = useToast();
+  const queryClient = useQueryClient();
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+    setFormData(prev => ({
+      ...prev,
+      [e.target.name]: e.target.value
+    }));
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     if (formData.password !== formData.confirmPassword) {
       toast({
-        title: "Passwords don't match",
-        description: "Please make sure your passwords match.",
+        title: "Password mismatch",
+        description: "Passwords do not match",
         variant: "destructive",
       });
       return;
@@ -42,10 +51,11 @@ export default function Signup() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          email: formData.email,
-          password: formData.password,
           firstName: formData.firstName,
           lastName: formData.lastName,
+          email: formData.email,
+          password: formData.password,
+          phone: formData.phone,
           role: formData.role
         }),
       });
@@ -54,13 +64,15 @@ export default function Signup() {
 
       if (response.ok) {
         toast({
-          title: "Account created successfully",
-          description: "Please sign in with your new account.",
+          title: "Registration successful",
+          description: "Your account has been created successfully!",
         });
+
+        // Navigate to login page
         navigate("/login");
       } else {
         toast({
-          title: "Signup failed",
+          title: "Registration failed",
           description: data.message || "Failed to create account",
           variant: "destructive",
         });
@@ -68,7 +80,7 @@ export default function Signup() {
     } catch (error) {
       console.error("Signup error:", error);
       toast({
-        title: "Signup failed",
+        title: "Registration failed",
         description: "An error occurred. Please try again.",
         variant: "destructive",
       });
@@ -85,7 +97,7 @@ export default function Signup() {
             <Heart className="h-12 w-12 text-primary" />
           </div>
           <CardTitle className="text-2xl font-bold text-neutral-800">
-            Join Youth Empowerment Hub
+            Youth Empowerment Hub
           </CardTitle>
           <p className="text-neutral-600 mt-2">Create your account</p>
         </CardHeader>
@@ -98,10 +110,11 @@ export default function Signup() {
                   <User className="absolute left-3 top-3 h-4 w-4 text-neutral-400" />
                   <Input
                     id="firstName"
+                    name="firstName"
                     type="text"
                     placeholder="First name"
                     value={formData.firstName}
-                    onChange={(e) => setFormData({...formData, firstName: e.target.value})}
+                    onChange={handleChange}
                     className="pl-10"
                     required
                   />
@@ -113,10 +126,11 @@ export default function Signup() {
                   <User className="absolute left-3 top-3 h-4 w-4 text-neutral-400" />
                   <Input
                     id="lastName"
+                    name="lastName"
                     type="text"
                     placeholder="Last name"
                     value={formData.lastName}
-                    onChange={(e) => setFormData({...formData, lastName: e.target.value})}
+                    onChange={handleChange}
                     className="pl-10"
                     required
                   />
@@ -130,10 +144,28 @@ export default function Signup() {
                 <Mail className="absolute left-3 top-3 h-4 w-4 text-neutral-400" />
                 <Input
                   id="email"
+                  name="email"
                   type="email"
                   placeholder="Enter your email"
                   value={formData.email}
-                  onChange={(e) => setFormData({...formData, email: e.target.value})}
+                  onChange={handleChange}
+                  className="pl-10"
+                  required
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="phone">Phone Number</Label>
+              <div className="relative">
+                <Phone className="absolute left-3 top-3 h-4 w-4 text-neutral-400" />
+                <Input
+                  id="phone"
+                  name="phone"
+                  type="tel"
+                  placeholder="Enter your phone number"
+                  value={formData.phone}
+                  onChange={handleChange}
                   className="pl-10"
                   required
                 />
@@ -142,18 +174,18 @@ export default function Signup() {
 
             <div className="space-y-2">
               <Label htmlFor="role">Role</Label>
-              <Select 
-                value={formData.role} 
-                onValueChange={(value) => setFormData({...formData, role: value})}
+              <select
+                id="role"
+                name="role"
+                value={formData.role}
+                onChange={handleChange}
+                className="w-full px-3 py-2 border border-neutral-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+                required
               >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select your role" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="student">Student</SelectItem>
-                  <SelectItem value="counsellor">Counsellor</SelectItem>
-                </SelectContent>
-              </Select>
+                <option value="student">Student</option>
+                <option value="counsellor">Counsellor</option>
+                <option value="admin">Admin</option>
+              </select>
             </div>
 
             <div className="space-y-2">
@@ -162,10 +194,11 @@ export default function Signup() {
                 <Lock className="absolute left-3 top-3 h-4 w-4 text-neutral-400" />
                 <Input
                   id="password"
+                  name="password"
                   type="password"
-                  placeholder="Create a password"
+                  placeholder="Enter your password"
                   value={formData.password}
-                  onChange={(e) => setFormData({...formData, password: e.target.value})}
+                  onChange={handleChange}
                   className="pl-10"
                   required
                 />
@@ -178,10 +211,11 @@ export default function Signup() {
                 <Lock className="absolute left-3 top-3 h-4 w-4 text-neutral-400" />
                 <Input
                   id="confirmPassword"
+                  name="confirmPassword"
                   type="password"
                   placeholder="Confirm your password"
                   value={formData.confirmPassword}
-                  onChange={(e) => setFormData({...formData, confirmPassword: e.target.value})}
+                  onChange={handleChange}
                   className="pl-10"
                   required
                 />

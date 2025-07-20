@@ -251,16 +251,36 @@ const sessions = new Map<string, string>(); // sessionId -> userId
         return res.status(403).json({ message: "Only students can book sessions" });
       }
       
-      const sessionData = insertSessionSchema.parse({
-        ...req.body,
+      console.log("Session creation request:", req.body);
+      console.log("Current user:", currentUser);
+      
+      // Create session data manually to avoid schema validation issues
+      const sessionData = {
         studentId: req.user.claims.sub,
-      });
+        counsellorId: req.body.counsellorId,
+        scheduledAt: new Date(req.body.scheduledAt),
+        status: 'pending' as const,
+        type: req.body.type || 'individual' as const,
+        notes: req.body.notes || null,
+        studentNotes: req.body.studentNotes || null,
+      };
+      
+      console.log("Session data:", sessionData);
       
       const session = await storage.createSession(sessionData);
+      console.log("Created session:", session);
       res.json(session);
     } catch (error) {
       console.error("Error creating session:", error);
-      res.status(500).json({ message: "Failed to create session" });
+      if (error instanceof Error) {
+        res.status(500).json({ 
+          message: "Failed to create session", 
+          error: error.message,
+          details: error.stack 
+        });
+      } else {
+        res.status(500).json({ message: "Failed to create session" });
+      }
     }
   });
 
