@@ -9,6 +9,8 @@ import { Heart, Mail, Lock } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 export default function Login() {
+  console.log("Login component rendered");
+  
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);

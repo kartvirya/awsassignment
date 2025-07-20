@@ -10,15 +10,7 @@
     "check": "tsc",
     "db:push": "drizzle-kit push",
     "start:all": "./start-app.sh",
-    "quick:start": "brew services start postgresql && createdb collegesafe 2>/dev/null || true && npm run db:push && npm run dev",
-    "docker:build": "docker build -t collegesafe .",
-    "docker:run": "docker run -p 3001:3001 --env-file .env collegesafe",
-    "docker:compose:up": "docker-compose up -d",
-    "docker:compose:down": "docker-compose down",
-    "docker:compose:logs": "docker-compose logs -f",
-    "docker:compose:restart": "docker-compose restart",
-    "deploy": "./scripts/deploy.sh",
-    "health": "curl -f http://localhost/health || echo 'Health check failed'"
+    "quick:start": "brew services start postgresql && createdb collegesafe 2>/dev/null || true && npm run db:push && npm run dev"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",

@@ -82,6 +82,8 @@ const sessions = new Map<string, string>(); // sessionId -> userId
         firstName,
         lastName,
         role: role as any,
+        passwordHash: password, // For demo purposes, store password as hash
+        passwordSalt: 'demo_salt', // For demo purposes, use a fixed salt
       };
       
       const user = await storage.upsertUser(newUser);
