@@ -4,8 +4,6 @@ import { Heart, Users, BookOpen, MessageSquare } from "lucide-react";
 import { useLocation } from "wouter";
 
 export default function Landing() {
-  console.log("Landing component rendered");
-  
   const [, navigate] = useLocation();
 
   return (
@@ -108,7 +106,7 @@ export default function Landing() {
             size="lg" 
             variant="secondary"
             className="bg-white text-primary hover:bg-neutral-100"
-            onClick={() => navigate('/signup')}
+            onClick={() => window.location.href = '/api/login'}
           >
             Sign Up Now
           </Button>

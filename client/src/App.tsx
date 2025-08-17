@@ -1,4 +1,4 @@
-import { useLocation } from "wouter";
+import { Switch, Route } from "wouter";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
@@ -14,9 +14,6 @@ import AdminDashboard from "@/pages/admin-dashboard";
 
 function Router() {
   const { isAuthenticated, isLoading, user } = useAuth();
-  const [location] = useLocation();
-
-  console.log("Router render:", { isAuthenticated, isLoading, user, location });
 
   if (isLoading) {
     return (
@@ -29,39 +26,36 @@ function Router() {
     );
   }
 
-  // For unauthenticated users
-  if (!isAuthenticated) {
-    switch (location) {
-      case "/":
-        return <Landing />;
-      case "/login":
-        return <Login />;
-      case "/signup":
-        return <Signup />;
-      default:
-        return <NotFound />;
-    }
-  }
-
-  // For authenticated users
-  switch (location) {
-    case "/":
-      if (user?.role === 'student') return <StudentDashboard />;
-      if (user?.role === 'counsellor') return <CounsellorDashboard />;
-      if (user?.role === 'admin') return <AdminDashboard />;
-      return <Landing />;
-    case "/student-dashboard":
-      return <StudentDashboard />;
-    case "/counsellor-dashboard":
-      return <CounsellorDashboard />;
-    case "/admin-dashboard":
-      return <AdminDashboard />;
-    default:
-      if (user?.role === 'student') return <StudentDashboard />;
-      if (user?.role === 'counsellor') return <CounsellorDashboard />;
-      if (user?.role === 'admin') return <AdminDashboard />;
-      return <Landing />;
-  }
+  return (
+    <Switch>
+      {!isAuthenticated ? (
+        <>
+          <Route path="/" component={Landing} />
+          <Route path="/login" component={Login} />
+          <Route path="/signup" component={Signup} />
+          <Route component={Login} />
+        </>
+      ) : (
+        <>
+          <Route path="/" component={() => {
+            if (user?.role === 'student') return <StudentDashboard />;
+            if (user?.role === 'counsellor') return <CounsellorDashboard />;
+            if (user?.role === 'admin') return <AdminDashboard />;
+            return <Landing />;
+          }} />
+          <Route path="/student" component={StudentDashboard} />
+          <Route path="/counsellor" component={CounsellorDashboard} />
+          <Route path="/admin" component={AdminDashboard} />
+          <Route component={() => {
+            if (user?.role === 'student') return <StudentDashboard />;
+            if (user?.role === 'counsellor') return <CounsellorDashboard />;
+            if (user?.role === 'admin') return <AdminDashboard />;
+            return <Landing />;
+          }} />
+        </>
+      )}
+    </Switch>
+  );
 }
 
 function App() {

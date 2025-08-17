@@ -50,8 +50,6 @@ export const users = pgTable("users", {
   lastName: varchar("last_name"),
   profileImageUrl: varchar("profile_image_url"),
   role: roleEnum("role").notNull().default("student"),
-  passwordHash: varchar("password_hash"),
-  passwordSalt: varchar("password_salt"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });

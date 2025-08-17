@@ -1,0 +1,503 @@
+service: collegesafe-serverless
+
+frameworkVersion: '3'
+
+provider:
+  name: aws
+  runtime: nodejs18.x
+  region: us-east-1
+  stage: ${opt:stage, 'dev'}
+  environment:
+    STAGE: ${self:provider.stage}
+    REGION: ${self:provider.region}
+    USERS_TABLE: ${self:service}-users-${self:provider.stage}
+    SESSIONS_TABLE: ${self:service}-sessions-${self:provider.stage}
+    RESOURCES_TABLE: ${self:service}-resources-${self:provider.stage}
+    MESSAGES_TABLE: ${self:service}-messages-${self:provider.stage}
+    PROGRESS_TABLE: ${self:service}-progress-${self:provider.stage}
+    RESOURCES_BUCKET: ${self:service}-resources-${self:provider.stage}
+    NOTIFICATIONS_TOPIC: ${self:service}-notifications-${self:provider.stage}
+    JWT_SECRET: ${env:JWT_SECRET, 'your-jwt-secret-key'}
+  iam:
+    role:
+      statements:
+        - Effect: Allow
+          Action:
+            - dynamodb:Query
+            - dynamodb:Scan
+            - dynamodb:GetItem
+            - dynamodb:PutItem
+            - dynamodb:UpdateItem
+            - dynamodb:DeleteItem
+          Resource: 
+            - "arn:aws:dynamodb:${self:provider.region}:*:table/${self:service}-users-${self:provider.stage}"
+            - "arn:aws:dynamodb:${self:provider.region}:*:table/${self:service}-sessions-${self:provider.stage}"
+            - "arn:aws:dynamodb:${self:provider.region}:*:table/${self:service}-resources-${self:provider.stage}"
+            - "arn:aws:dynamodb:${self:provider.region}:*:table/${self:service}-messages-${self:provider.stage}"
+            - "arn:aws:dynamodb:${self:provider.region}:*:table/${self:service}-progress-${self:provider.stage}"
+        - Effect: Allow
+          Action:
+            - s3:GetObject
+            - s3:PutObject
+            - s3:DeleteObject
+            - s3:ListBucket
+          Resource:
+            - "arn:aws:s3:::${self:service}-resources-${self:provider.stage}"
+            - "arn:aws:s3:::${self:service}-resources-${self:provider.stage}/*"
+        - Effect: Allow
+          Action:
+            - sns:Publish
+          Resource: 
+            - "arn:aws:sns:${self:provider.region}:*:${self:service}-notifications-${self:provider.stage}"
+        - Effect: Allow
+          Action:
+            - cloudwatch:PutMetricData
+            - xray:PutTraceSegments
+            - xray:PutTelemetryRecords
+          Resource: "*"
+
+plugins:
+  - serverless-typescript
+  - serverless-offline
+
+custom:
+  serverless-offline:
+    httpPort: 3001
+    lambdaPort: 3002
+  typescript:
+    webpack:
+      webpackConfig: webpack.config.js
+      includeModules: true
+      packager: 'npm'
+
+functions:
+  # Authentication Functions
+  login:
+    handler: src/handlers/auth/login.handler
+    events:
+      - http:
+          path: /api/login
+          method: post
+          cors: true
+
+  signup:
+    handler: src/handlers/auth/signup.handler
+    events:
+      - http:
+          path: /api/signup
+          method: post
+          cors: true
+
+  logout:
+    handler: src/handlers/auth/logout.handler
+    events:
+      - http:
+          path: /api/logout
+          method: post
+          cors: true
+
+  getCurrentUser:
+    handler: src/handlers/auth/getCurrentUser.handler
+    events:
+      - http:
+          path: /api/auth/user
+          method: get
+          cors: true
+
+  # User Management Functions
+  getUsers:
+    handler: src/handlers/users/getUsers.handler
+    events:
+      - http:
+          path: /api/users
+          method: get
+          cors: true
+
+  getUsersByRole:
+    handler: src/handlers/users/getUsersByRole.handler
+    events:
+      - http:
+          path: /api/users/role/{role}
+          method: get
+          cors: true
+
+  updateUserRole:
+    handler: src/handlers/users/updateUserRole.handler
+    events:
+      - http:
+          path: /api/users/{id}/role
+          method: patch
+          cors: true
+
+  # Resource Management Functions
+  createResource:
+    handler: src/handlers/resources/createResource.handler
+    events:
+      - http:
+          path: /api/resources
+          method: post
+          cors: true
+
+  getResources:
+    handler: src/handlers/resources/getResources.handler
+    events:
+      - http:
+          path: /api/resources
+          method: get
+          cors: true
+
+  updateResource:
+    handler: src/handlers/resources/updateResource.handler
+    events:
+      - http:
+          path: /api/resources/{id}
+          method: patch
+          cors: true
+
+  deleteResource:
+    handler: src/handlers/resources/deleteResource.handler
+    events:
+      - http:
+          path: /api/resources/{id}
+          method: delete
+          cors: true
+
+  uploadResourceFile:
+    handler: src/handlers/resources/uploadResourceFile.handler
+    events:
+      - http:
+          path: /api/resources/upload
+          method: post
+          cors: true
+
+  # Session Management Functions
+  createSession:
+    handler: src/handlers/sessions/createSession.handler
+    events:
+      - http:
+          path: /api/sessions
+          method: post
+          cors: true
+
+  getSessions:
+    handler: src/handlers/sessions/getSessions.handler
+    events:
+      - http:
+          path: /api/sessions
+          method: get
+          cors: true
+
+  updateSession:
+    handler: src/handlers/sessions/updateSession.handler
+    events:
+      - http:
+          path: /api/sessions/{id}
+          method: patch
+          cors: true
+
+  deleteSession:
+    handler: src/handlers/sessions/deleteSession.handler
+    events:
+      - http:
+          path: /api/sessions/{id}
+          method: delete
+          cors: true
+
+  # Messaging Functions
+  sendMessage:
+    handler: src/handlers/messages/sendMessage.handler
+    events:
+      - http:
+          path: /api/messages
+          method: post
+          cors: true
+
+  getMessages:
+    handler: src/handlers/messages/getMessages.handler
+    events:
+      - http:
+          path: /api/messages
+          method: get
+          cors: true
+
+  markMessageRead:
+    handler: src/handlers/messages/markMessageRead.handler
+    events:
+      - http:
+          path: /api/messages/{id}/read
+          method: patch
+          cors: true
+
+  # Progress Tracking Functions
+  updateProgress:
+    handler: src/handlers/progress/updateProgress.handler
+    events:
+      - http:
+          path: /api/progress
+          method: post
+          cors: true
+
+  getProgress:
+    handler: src/handlers/progress/getProgress.handler
+    events:
+      - http:
+          path: /api/progress
+          method: get
+          cors: true
+
+  # Health Check
+  health:
+    handler: src/handlers/health.handler
+    events:
+      - http:
+          path: /health
+          method: get
+          cors: true
+
+resources:
+  Resources:
+    # DynamoDB Tables
+    UsersTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: ${self:provider.environment.USERS_TABLE}
+        BillingMode: PAY_PER_REQUEST
+        AttributeDefinitions:
+          - AttributeName: id
+            AttributeType: S
+          - AttributeName: email
+            AttributeType: S
+        KeySchema:
+          - AttributeName: id
+            KeyType: HASH
+        GlobalSecondaryIndexes:
+          - IndexName: EmailIndex
+            KeySchema:
+              - AttributeName: email
+                KeyType: HASH
+            Projection:
+              ProjectionType: ALL
+
+    SessionsTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: ${self:provider.environment.SESSIONS_TABLE}
+        BillingMode: PAY_PER_REQUEST
+        AttributeDefinitions:
+          - AttributeName: id
+            AttributeType: S
+          - AttributeName: studentId
+            AttributeType: S
+          - AttributeName: counsellorId
+            AttributeType: S
+          - AttributeName: scheduledAt
+            AttributeType: S
+        KeySchema:
+          - AttributeName: id
+            KeyType: HASH
+        GlobalSecondaryIndexes:
+          - IndexName: StudentSessionsIndex
+            KeySchema:
+              - AttributeName: studentId
+                KeyType: HASH
+              - AttributeName: scheduledAt
+                KeyType: RANGE
+            Projection:
+              ProjectionType: ALL
+          - IndexName: CounsellorSessionsIndex
+            KeySchema:
+              - AttributeName: counsellorId
+                KeyType: HASH
+              - AttributeName: scheduledAt
+                KeyType: RANGE
+            Projection:
+              ProjectionType: ALL
+
+    ResourcesTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: ${self:provider.environment.RESOURCES_TABLE}
+        BillingMode: PAY_PER_REQUEST
+        AttributeDefinitions:
+          - AttributeName: id
+            AttributeType: S
+          - AttributeName: type
+            AttributeType: S
+          - AttributeName: uploadedBy
+            AttributeType: S
+        KeySchema:
+          - AttributeName: id
+            KeyType: HASH
+        GlobalSecondaryIndexes:
+          - IndexName: TypeIndex
+            KeySchema:
+              - AttributeName: type
+                KeyType: HASH
+            Projection:
+              ProjectionType: ALL
+          - IndexName: UploadedByIndex
+            KeySchema:
+              - AttributeName: uploadedBy
+                KeyType: HASH
+            Projection:
+              ProjectionType: ALL
+
+    MessagesTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: ${self:provider.environment.MESSAGES_TABLE}
+        BillingMode: PAY_PER_REQUEST
+        AttributeDefinitions:
+          - AttributeName: id
+            AttributeType: S
+          - AttributeName: senderId
+            AttributeType: S
+          - AttributeName: receiverId
+            AttributeType: S
+          - AttributeName: createdAt
+            AttributeType: S
+        KeySchema:
+          - AttributeName: id
+            KeyType: HASH
+        GlobalSecondaryIndexes:
+          - IndexName: SenderMessagesIndex
+            KeySchema:
+              - AttributeName: senderId
+                KeyType: HASH
+              - AttributeName: createdAt
+                KeyType: RANGE
+            Projection:
+              ProjectionType: ALL
+          - IndexName: ReceiverMessagesIndex
+            KeySchema:
+              - AttributeName: receiverId
+                KeyType: HASH
+              - AttributeName: createdAt
+                KeyType: RANGE
+            Projection:
+              ProjectionType: ALL
+
+    ProgressTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: ${self:provider.environment.PROGRESS_TABLE}
+        BillingMode: PAY_PER_REQUEST
+        AttributeDefinitions:
+          - AttributeName: id
+            AttributeType: S
+          - AttributeName: userId
+            AttributeType: S
+          - AttributeName: resourceId
+            AttributeType: S
+        KeySchema:
+          - AttributeName: id
+            KeyType: HASH
+        GlobalSecondaryIndexes:
+          - IndexName: UserProgressIndex
+            KeySchema:
+              - AttributeName: userId
+                KeyType: HASH
+            Projection:
+              ProjectionType: ALL
+          - IndexName: ResourceProgressIndex
+            KeySchema:
+              - AttributeName: resourceId
+                KeyType: HASH
+            Projection:
+              ProjectionType: ALL
+
+    # S3 Bucket for Resources
+    ResourcesBucket:
+      Type: AWS::S3::Bucket
+      Properties:
+        BucketName: ${self:provider.environment.RESOURCES_BUCKET}
+        CorsConfiguration:
+          CorsRules:
+            - AllowedHeaders: ['*']
+              AllowedMethods: [GET, PUT, POST, DELETE, HEAD]
+              AllowedOrigins: ['*']
+              MaxAge: 3000
+
+    # SNS Topic for Notifications
+    NotificationsTopic:
+      Type: AWS::SNS::Topic
+      Properties:
+        TopicName: ${self:provider.environment.NOTIFICATIONS_TOPIC}
+        DisplayName: CollegeSafe Notifications
+
+    # CloudFront Distribution
+    CloudFrontDistribution:
+      Type: AWS::CloudFront::Distribution
+      Properties:
+        DistributionConfig:
+          Origins:
+            - Id: S3Origin
+              DomainName: ${self:provider.environment.RESOURCES_BUCKET}.s3.amazonaws.com
+              S3OriginConfig:
+                OriginAccessIdentity: !Ref CloudFrontOriginAccessIdentity
+          Enabled: true
+          DefaultCacheBehavior:
+            TargetOriginId: S3Origin
+            ViewerProtocolPolicy: redirect-to-https
+            AllowedMethods:
+              - GET
+              - HEAD
+              - OPTIONS
+            CachedMethods:
+              - GET
+              - HEAD
+            ForwardedValues:
+              QueryString: false
+              Cookies:
+                Forward: none
+            MinTTL: 0
+            DefaultTTL: 86400
+            MaxTTL: 31536000
+          PriceClass: PriceClass_100
+          ViewerCertificate:
+            CloudFrontDefaultCertificate: true
+
+    CloudFrontOriginAccessIdentity:
+      Type: AWS::CloudFront::CloudFrontOriginAccessIdentity
+      Properties:
+        CloudFrontOriginAccessIdentityConfig:
+          Comment: CollegeSafe CloudFront OAI
+
+    # S3 Bucket Policy for CloudFront
+    ResourcesBucketPolicy:
+      Type: AWS::S3::BucketPolicy
+      Properties:
+        Bucket: !Ref ResourcesBucket
+        PolicyDocument:
+          Statement:
+            - Effect: Allow
+              Principal:
+                AWS: !GetAtt CloudFrontOriginAccessIdentity.S3CanonicalUserId
+              Action: s3:GetObject
+              Resource: !Sub "${ResourcesBucket}/*"
+
+  Outputs:
+    ApiGatewayRestApiId:
+      Description: API Gateway REST API ID
+      Value: !Ref ApiGatewayRestApi
+      Export:
+        Name: ${self:service}-${self:provider.stage}-ApiGatewayRestApiId
+
+    CloudFrontDistributionId:
+      Description: CloudFront Distribution ID
+      Value: !Ref CloudFrontDistribution
+      Export:
+        Name: ${self:service}-${self:provider.stage}-CloudFrontDistributionId
+
+    ResourcesBucketName:
+      Description: S3 Bucket for Resources
+      Value: !Ref ResourcesBucket
+      Export:
+        Name: ${self:service}-${self:provider.stage}-ResourcesBucketName
+
+    NotificationsTopicArn:
+      Description: SNS Topic ARN for Notifications
+      Value: !Ref NotificationsTopic
+      Export:
+        Name: ${self:service}-${self:provider.stage}-NotificationsTopicArn
+
