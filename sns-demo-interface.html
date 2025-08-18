@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CollegeSafe - Notification System Demo</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+        
+        .container {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            max-width: 800px;
+            width: 100%;
+            padding: 40px;
+        }
+        
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+            text-align: center;
+        }
+        
+        .subtitle {
+            color: #666;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        
+        .section {
+            margin-bottom: 30px;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 10px;
+        }
+        
+        .section h2 {
+            color: #4a5568;
+            margin-bottom: 15px;
+            font-size: 1.2em;
+        }
+        
+        .form-group {
+            margin-bottom: 15px;
+        }
+        
+        label {
+            display: block;
+            margin-bottom: 5px;
+            color: #555;
+            font-weight: 500;
+        }
+        
+        input, select, textarea {
+            width: 100%;
+            padding: 10px;
+            border: 2px solid #e2e8f0;
+            border-radius: 8px;
+            font-size: 14px;
+            transition: border-color 0.3s;
+        }
+        
+        input:focus, select:focus, textarea:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        
+        button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 12px 30px;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+            margin-right: 10px;
+            margin-top: 10px;
+        }
+        
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(102, 126, 234, 0.4);
+        }
+        
+        button:active {
+            transform: translateY(0);
+        }
+        
+        .alert {
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            display: none;
+        }
+        
+        .alert.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        
+        .alert.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        
+        .alert.info {
+            background: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+        
+        .appointment-card {
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 10px;
+            border: 1px solid #e2e8f0;
+        }
+        
+        .appointment-card h3 {
+            color: #4a5568;
+            margin-bottom: 10px;
+        }
+        
+        .appointment-detail {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 5px;
+            font-size: 14px;
+        }
+        
+        .appointment-detail strong {
+            color: #718096;
+        }
+        
+        .appointment-actions {
+            margin-top: 10px;
+            padding-top: 10px;
+            border-top: 1px solid #e2e8f0;
+        }
+        
+        .btn-cancel {
+            background: linear-gradient(135deg, #f56565 0%, #ed64a6 100%);
+        }
+        
+        .btn-remind {
+            background: linear-gradient(135deg, #48bb78 0%, #38b2ac 100%);
+        }
+        
+        .topic-info {
+            background: #edf2f7;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+        
+        .topic-info code {
+            background: #2d3748;
+            color: #48bb78;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 12px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🏥 CollegeSafe Mental Health Support</h1>
+        <p class="subtitle">Notification System Demo for AWS SNS</p>
+        
+        <div class="alert success" id="successAlert"></div>
+        <div class="alert error" id="errorAlert"></div>
+        <div class="alert info" id="infoAlert"></div>
+        
+        <div class="topic-info">
+            <strong>SNS Topic ARN:</strong><br>
+            <code>arn:aws:sns:ap-southeast-2:643303011818:college-safe-serverless-dev-notifications</code>
+        </div>
+        
+        <!-- Email Subscription Section -->
+        <div class="section">
+            <h2>📧 Email Subscription (Figure 71-72)</h2>
+            <div class="form-group">
+                <label for="email">Enter your email address to receive notifications:</label>
+                <input type="email" id="email" placeholder="your.email@example.com">
+            </div>
+            <button onclick="subscribeEmail()">Subscribe to Notifications</button>
+            <p style="margin-top: 10px; color: #666; font-size: 14px;">
+                ⚠️ After subscribing, check your email and confirm the subscription
+            </p>
+        </div>
+        
+        <!-- Appointment Management Section -->
+        <div class="section">
+            <h2>📅 Appointment Management</h2>
+            
+            <!-- Sample Appointments -->
+            <div class="appointment-card">
+                <h3>Upcoming Appointment</h3>
+                <div class="appointment-detail">
+                    <strong>Student:</strong> <span>John Doe</span>
+                </div>
+                <div class="appointment-detail">
+                    <strong>Counsellor:</strong> <span>Dr. Jane Smith</span>
+                </div>
+                <div class="appointment-detail">
+                    <strong>Date:</strong> <span>March 25, 2024</span>
+                </div>
+                <div class="appointment-detail">
+                    <strong>Time:</strong> <span>10:00 AM</span>
+                </div>
+                <div class="appointment-detail">
+                    <strong>Type:</strong> <span>Individual Session</span>
+                </div>
+                <div class="appointment-actions">
+                    <button onclick="sendNotification('scheduled', 'John Doe', 'Dr. Jane Smith', '2024-03-25', '10:00 AM')">
+                        📤 Send Scheduled Notification (Figure 73-74)
+                    </button>
+                    <button class="btn-cancel" onclick="sendNotification('cancelled', 'John Doe', 'Dr. Jane Smith', '2024-03-25', '10:00 AM')">
+                        ❌ Send Cancellation (Figure 75-76)
+                    </button>
+                    <button class="btn-remind" onclick="sendNotification('reminder', 'John Doe', 'Dr. Jane Smith', '2024-03-25', '10:00 AM')">
+                        🔔 Send Reminder
+                    </button>
+                </div>
+            </div>
+            
+            <div class="appointment-card">
+                <h3>Another Appointment</h3>
+                <div class="appointment-detail">
+                    <strong>Student:</strong> <span>Jane Wilson</span>
+                </div>
+                <div class="appointment-detail">
+                    <strong>Counsellor:</strong> <span>Dr. Michael Chen</span>
+                </div>
+                <div class="appointment-detail">
+                    <strong>Date:</strong> <span>March 26, 2024</span>
+                </div>
+                <div class="appointment-detail">
+                    <strong>Time:</strong> <span>2:00 PM</span>
+                </div>
+                <div class="appointment-detail">
+                    <strong>Type:</strong> <span>Group Session</span>
+                </div>
+                <div class="appointment-actions">
+                    <button onclick="sendNotification('scheduled', 'Jane Wilson', 'Dr. Michael Chen', '2024-03-26', '2:00 PM')">
+                        📤 Send Scheduled Notification
+                    </button>
+                    <button class="btn-remind" onclick="sendNotification('reminder', 'Jane Wilson', 'Dr. Michael Chen', '2024-03-26', '2:00 PM')">
+                        🔔 Send Reminder
+                    </button>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Custom Notification Section -->
+        <div class="section">
+            <h2>✉️ Send Custom Notification</h2>
+            <div class="form-group">
+                <label for="customSubject">Subject:</label>
+                <input type="text" id="customSubject" placeholder="Enter notification subject">
+            </div>
+            <div class="form-group">
+                <label for="customMessage">Message:</label>
+                <textarea id="customMessage" rows="4" placeholder="Enter notification message"></textarea>
+            </div>
+            <button onclick="sendCustomNotification()">Send Custom Notification</button>
+        </div>
+        
+        <!-- AWS CLI Commands -->
+        <div class="section">
+            <h2>🖥️ AWS CLI Commands for Testing</h2>
+            <div style="background: #2d3748; color: #fff; padding: 15px; border-radius: 8px; font-family: monospace; font-size: 12px;">
+                <p style="margin-bottom: 10px;"># Subscribe email</p>
+                <p style="color: #48bb78;">aws sns subscribe --topic-arn arn:aws:sns:ap-southeast-2:643303011818:college-safe-serverless-dev-notifications --protocol email --notification-endpoint your-email@example.com</p>
+                <br>
+                <p style="margin-bottom: 10px;"># Send test message</p>
+                <p style="color: #48bb78;">aws sns publish --topic-arn arn:aws:sns:ap-southeast-2:643303011818:college-safe-serverless-dev-notifications --subject "Test" --message "Test message"</p>
+                <br>
+                <p style="margin-bottom: 10px;"># List subscriptions</p>
+                <p style="color: #48bb78;">aws sns list-subscriptions-by-topic --topic-arn arn:aws:sns:ap-southeast-2:643303011818:college-safe-serverless-dev-notifications</p>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        const topicArn = 'arn:aws:sns:ap-southeast-2:643303011818:college-safe-serverless-dev-notifications';
+        
+        function showAlert(type, message) {
+            const alerts = document.querySelectorAll('.alert');
+            alerts.forEach(alert => alert.style.display = 'none');
+            
+            const alert = document.getElementById(type + 'Alert');
+            alert.textContent = message;
+            alert.style.display = 'block';
+            
+            setTimeout(() => {
+                alert.style.display = 'none';
+            }, 5000);
+        }
+        
+        function subscribeEmail() {
+            const email = document.getElementById('email').value;
+            if (!email) {
+                showAlert('error', 'Please enter an email address');
+                return;
+            }
+            
+            showAlert('info', `To subscribe ${email}, run this command in terminal:\naws sns subscribe --topic-arn ${topicArn} --protocol email --notification-endpoint ${email}`);
+            
+            // Copy command to clipboard
+            const command = `aws sns subscribe --topic-arn ${topicArn} --protocol email --notification-endpoint ${email}`;
+            navigator.clipboard.writeText(command);
+            
+            setTimeout(() => {
+                showAlert('success', 'Command copied to clipboard! Run it in your terminal and check your email for confirmation.');
+            }, 1000);
+        }
+        
+        function sendNotification(action, userName, counsellorName, date, time) {
+            let subject, message;
+            
+            if (action === 'scheduled') {
+                subject = 'Appointment Scheduled - CollegeSafe';
+                message = `Dear ${userName},\n\nYour counselling appointment has been successfully scheduled.\n\nDetails:\n- Counsellor: ${counsellorName}\n- Date: ${date}\n- Time: ${time}\n\nBest regards,\nCollegeSafe Team`;
+            } else if (action === 'cancelled') {
+                subject = 'Appointment Cancelled - CollegeSafe';
+                message = `Dear ${userName},\n\nYour counselling appointment has been cancelled.\n\nDetails:\n- Counsellor: ${counsellorName}\n- Date: ${date}\n- Time: ${time}\n\nPlease reschedule at your convenience.\n\nBest regards,\nCollegeSafe Team`;
+            } else if (action === 'reminder') {
+                subject = 'Appointment Reminder - CollegeSafe';
+                message = `Dear ${userName},\n\nThis is a reminder about your upcoming appointment.\n\nDetails:\n- Counsellor: ${counsellorName}\n- Date: ${date}\n- Time: ${time}\n\nBest regards,\nCollegeSafe Team`;
+            }
+            
+            const command = `aws sns publish --topic-arn ${topicArn} --subject "${subject}" --message "${message}"`;
+            navigator.clipboard.writeText(command);
+            
+            showAlert('success', `${action.charAt(0).toUpperCase() + action.slice(1)} notification command copied! Run it in terminal to send the notification.`);
+        }
+        
+        function sendCustomNotification() {
+            const subject = document.getElementById('customSubject').value;
+            const message = document.getElementById('customMessage').value;
+            
+            if (!subject || !message) {
+                showAlert('error', 'Please enter both subject and message');
+                return;
+            }
+            
+            const command = `aws sns publish --topic-arn ${topicArn} --subject "${subject}" --message "${message}"`;
+            navigator.clipboard.writeText(command);
+            
+            showAlert('success', 'Custom notification command copied! Run it in terminal to send the notification.');
+        }
+    </script>
+</body>
+</html>

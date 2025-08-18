@@ -1,0 +1,230 @@
+{
+    "widgets": [
+        {
+            "type": "metric",
+            "x": 0,
+            "y": 0,
+            "width": 12,
+            "height": 6,
+            "properties": {
+                "metrics": [
+                    [ "AWS/Lambda", "Duration", { "stat": "Average" } ],
+                    [ ".", ".", { "stat": "p99" } ],
+                    [ ".", ".", { "stat": "p50" } ]
+                ],
+                "view": "timeSeries",
+                "stacked": false,
+                "region": "ap-southeast-2",
+                "title": "Lambda Function Duration (ms)",
+                "period": 300,
+                "yAxis": {
+                    "left": {
+                        "min": 0
+                    }
+                }
+            }
+        },
+        {
+            "type": "metric",
+            "x": 12,
+            "y": 0,
+            "width": 12,
+            "height": 6,
+            "properties": {
+                "metrics": [
+                    [ "AWS/Lambda", "Invocations", { "stat": "Sum" } ],
+                    [ ".", "Errors", { "stat": "Sum" } ],
+                    [ ".", "Throttles", { "stat": "Sum" } ]
+                ],
+                "view": "timeSeries",
+                "stacked": false,
+                "region": "ap-southeast-2",
+                "title": "Lambda Invocations & Errors",
+                "period": 300,
+                "yAxis": {
+                    "left": {
+                        "min": 0
+                    }
+                }
+            }
+        },
+        {
+            "type": "metric",
+            "x": 0,
+            "y": 6,
+            "width": 8,
+            "height": 6,
+            "properties": {
+                "metrics": [
+                    [ "AWS/Lambda", "ConcurrentExecutions", { "stat": "Maximum" } ]
+                ],
+                "view": "timeSeries",
+                "stacked": false,
+                "region": "ap-southeast-2",
+                "title": "Concurrent Executions",
+                "period": 300,
+                "yAxis": {
+                    "left": {
+                        "min": 0
+                    }
+                }
+            }
+        },
+        {
+            "type": "metric",
+            "x": 8,
+            "y": 6,
+            "width": 8,
+            "height": 6,
+            "properties": {
+                "metrics": [
+                    [ "AWS/Lambda", "Errors", { "stat": "Sum", "id": "m1" } ],
+                    [ ".", "Invocations", { "stat": "Sum", "id": "m2", "visible": false } ],
+                    [ { "expression": "(m1/m2)*100", "label": "Error Rate %", "id": "e1" } ]
+                ],
+                "view": "timeSeries",
+                "stacked": false,
+                "region": "ap-southeast-2",
+                "title": "Error Rate",
+                "period": 300,
+                "yAxis": {
+                    "left": {
+                        "min": 0,
+                        "max": 100
+                    }
+                }
+            }
+        },
+        {
+            "type": "metric",
+            "x": 16,
+            "y": 6,
+            "width": 8,
+            "height": 6,
+            "properties": {
+                "metrics": [
+                    [ "AWS/ApiGateway", "Count", "ApiName", "college-safe-serverless" ],
+                    [ ".", "4XXError", ".", "." ],
+                    [ ".", "5XXError", ".", "." ]
+                ],
+                "view": "timeSeries",
+                "stacked": false,
+                "region": "ap-southeast-2",
+                "title": "API Gateway Requests",
+                "period": 300
+            }
+        },
+        {
+            "type": "metric",
+            "x": 0,
+            "y": 12,
+            "width": 12,
+            "height": 6,
+            "properties": {
+                "metrics": [
+                    [ "AWS/X-Ray", "TracesProcessed", { "stat": "Sum" } ],
+                    [ ".", "TracesReceived", { "stat": "Sum" } ]
+                ],
+                "view": "timeSeries",
+                "stacked": false,
+                "region": "ap-southeast-2",
+                "title": "X-Ray Traces",
+                "period": 300
+            }
+        },
+        {
+            "type": "metric",
+            "x": 12,
+            "y": 12,
+            "width": 12,
+            "height": 6,
+            "properties": {
+                "metrics": [
+                    [ "AWS/X-Ray", "LatencyHigh", "ServiceName", "college-safe-serverless", { "stat": "Average" } ],
+                    [ ".", "LatencyOK", ".", ".", { "stat": "Average" } ]
+                ],
+                "view": "timeSeries",
+                "stacked": false,
+                "region": "ap-southeast-2",
+                "title": "X-Ray Service Latency",
+                "period": 300
+            }
+        },
+        {
+            "type": "log",
+            "x": 0,
+            "y": 18,
+            "width": 24,
+            "height": 6,
+            "properties": {
+                "query": "SOURCE '/aws/lambda/college-safe-serverless-dev-auth'\n| fields @timestamp, @message\n| filter @message like /ERROR/\n| sort @timestamp desc\n| limit 50",
+                "region": "ap-southeast-2",
+                "title": "Recent Errors",
+                "queryLanguage": "kusto"
+            }
+        },
+        {
+            "type": "metric",
+            "x": 0,
+            "y": 24,
+            "width": 8,
+            "height": 6,
+            "properties": {
+                "metrics": [
+                    [ "AWS/Lambda", "Duration", "FunctionName", "college-safe-serverless-dev-auth" ],
+                    [ ".", ".", ".", "college-safe-serverless-dev-users" ],
+                    [ ".", ".", ".", "college-safe-serverless-dev-resources" ],
+                    [ ".", ".", ".", "college-safe-serverless-dev-sessions" ],
+                    [ ".", ".", ".", "college-safe-serverless-dev-messages" ],
+                    [ ".", ".", ".", "college-safe-serverless-dev-upload" ]
+                ],
+                "view": "singleValue",
+                "region": "ap-southeast-2",
+                "title": "Current Function Duration",
+                "period": 300
+            }
+        },
+        {
+            "type": "metric",
+            "x": 8,
+            "y": 24,
+            "width": 8,
+            "height": 6,
+            "properties": {
+                "metrics": [
+                    [ "AWS/Lambda", "Invocations", "FunctionName", "college-safe-serverless-dev-auth", { "stat": "Sum" } ],
+                    [ ".", ".", ".", "college-safe-serverless-dev-users", { "stat": "Sum" } ],
+                    [ ".", ".", ".", "college-safe-serverless-dev-resources", { "stat": "Sum" } ],
+                    [ ".", ".", ".", "college-safe-serverless-dev-sessions", { "stat": "Sum" } ],
+                    [ ".", ".", ".", "college-safe-serverless-dev-messages", { "stat": "Sum" } ],
+                    [ ".", ".", ".", "college-safe-serverless-dev-upload", { "stat": "Sum" } ]
+                ],
+                "view": "barChart",
+                "region": "ap-southeast-2",
+                "title": "Function Invocation Distribution",
+                "period": 3600
+            }
+        },
+        {
+            "type": "metric",
+            "x": 16,
+            "y": 24,
+            "width": 8,
+            "height": 6,
+            "properties": {
+                "metrics": [
+                    [ "AWS/Lambda", "Errors", "FunctionName", "college-safe-serverless-dev-auth", { "stat": "Sum" } ],
+                    [ ".", ".", ".", "college-safe-serverless-dev-users", { "stat": "Sum" } ],
+                    [ ".", ".", ".", "college-safe-serverless-dev-resources", { "stat": "Sum" } ],
+                    [ ".", ".", ".", "college-safe-serverless-dev-sessions", { "stat": "Sum" } ],
+                    [ ".", ".", ".", "college-safe-serverless-dev-messages", { "stat": "Sum" } ],
+                    [ ".", ".", ".", "college-safe-serverless-dev-upload", { "stat": "Sum" } ]
+                ],
+                "view": "pie",
+                "region": "ap-southeast-2",
+                "title": "Error Distribution by Function",
+                "period": 3600
+            }
+        }
+    ]
+}
