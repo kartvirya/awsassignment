@@ -1,0 +1,218 @@
+service: college-safe-serverless
+
+frameworkVersion: '4'
+
+provider:
+  name: aws
+  runtime: nodejs18.x
+  region: ${opt:region, 'ap-southeast-2'}
+  stage: ${opt:stage, 'dev'}
+  memorySize: 512
+  timeout: 30
+  deploymentBucket:
+    name: college-safe-deployment-${self:provider.stage}-${aws:accountId}
+    serverSideEncryption: AES256
+  environment:
+    DATABASE_URL: ${env:DATABASE_URL}
+    NODE_ENV: production
+  iam:
+    role:
+      statements:
+        - Effect: Allow
+          Action:
+            - logs:CreateLogGroup
+            - logs:CreateLogStream
+            - logs:PutLogEvents
+          Resource: 
+            - 'arn:aws:logs:*:*:*'
+        - Effect: Allow
+          Action:
+            - s3:GetObject
+            - s3:PutObject
+            - s3:DeleteObject
+          Resource: 
+            - 'arn:aws:s3:::${self:service}-${self:provider.stage}-uploads/*'
+        - Effect: Allow
+          Action:
+            - sns:Publish
+          Resource: 
+            - 'arn:aws:sns:*:*:${self:service}-${self:provider.stage}-notifications'
+  tracing:
+    lambda: true
+    apiGateway: true
+
+functions:
+  # Authentication functions
+  auth:
+    handler: dist/lambda/auth.handler
+    events:
+      - http:
+          path: /api/login
+          method: post
+          cors: true
+      - http:
+          path: /api/signup
+          method: post
+          cors: true
+      - http:
+          path: /api/logout
+          method: post
+          cors: true
+      - http:
+          path: /api/auth/user
+          method: get
+          cors: true
+
+  # User management functions
+  users:
+    handler: dist/lambda/users.handler
+    events:
+      - http:
+          path: /api/users
+          method: get
+          cors: true
+      - http:
+          path: /api/users/role/{role}
+          method: get
+          cors: true
+      - http:
+          path: /api/users/{id}/role
+          method: patch
+          cors: true
+
+  # Resources functions
+  resources:
+    handler: dist/lambda/resources.handler
+    events:
+      - http:
+          path: /api/resources
+          method: get
+          cors: true
+      - http:
+          path: /api/resources
+          method: post
+          cors: true
+      - http:
+          path: /api/resources/{id}
+          method: get
+          cors: true
+      - http:
+          path: /api/resources/{id}
+          method: patch
+          cors: true
+      - http:
+          path: /api/resources/{id}
+          method: delete
+          cors: true
+
+  # Sessions functions
+  sessions:
+    handler: dist/lambda/sessions.handler
+    events:
+      - http:
+          path: /api/sessions
+          method: post
+          cors: true
+      - http:
+          path: /api/sessions/student
+          method: get
+          cors: true
+      - http:
+          path: /api/sessions/counsellor
+          method: get
+          cors: true
+      - http:
+          path: /api/sessions/pending
+          method: get
+          cors: true
+      - http:
+          path: /api/sessions/all
+          method: get
+          cors: true
+      - http:
+          path: /api/sessions/{id}
+          method: patch
+          cors: true
+
+  # Messages functions
+  messages:
+    handler: dist/lambda/messages.handler
+    events:
+      - http:
+          path: /api/messages
+          method: post
+          cors: true
+      - http:
+          path: /api/messages/conversations
+          method: get
+          cors: true
+      - http:
+          path: /api/messages/{conversationId}
+          method: get
+          cors: true
+
+  # File upload function with S3 integration
+  upload:
+    handler: dist/lambda/upload.handler
+    events:
+      - http:
+          path: /api/upload
+          method: post
+          cors: true
+
+resources:
+  Resources:
+    # S3 bucket for file uploads
+    UploadsBucket:
+      Type: AWS::S3::Bucket
+      Properties:
+        BucketName: ${self:service}-${self:provider.stage}-uploads
+        CorsConfiguration:
+          CorsRules:
+            - AllowedHeaders:
+                - "*"
+              AllowedMethods:
+                - GET
+                - PUT
+                - POST
+                - DELETE
+              AllowedOrigins:
+                - "*"
+              MaxAge: 3000
+
+    # SNS topic for notifications
+    NotificationsTopic:
+      Type: AWS::SNS::Topic
+      Properties:
+        TopicName: ${self:service}-${self:provider.stage}-notifications
+
+  Outputs:
+    ApiGatewayRestApiId:
+      Value:
+        Ref: ApiGatewayRestApi
+      Export:
+        Name: ${self:service}-${self:provider.stage}-api-id
+        
+    UploadsBucket:
+      Value:
+        Ref: UploadsBucket
+      Export:
+        Name: ${self:service}-${self:provider.stage}-uploads-bucket
+
+    NotificationsTopic:
+      Value:
+        Ref: NotificationsTopic
+      Export:
+        Name: ${self:service}-${self:provider.stage}-notifications-topic
+
+package:
+  exclude:
+    - node_modules/**
+    - .git/**
+    - client/**
+    - nginx/**
+    - '*.md'
+  include:
+    - dist/**
+    - package.json
+    - package-lock.json

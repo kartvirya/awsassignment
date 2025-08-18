@@ -1,0 +1,332 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: College Safe Serverless Architecture - Task 2
+
+Parameters:
+  DatabaseURL:
+    Type: String
+    Description: PostgreSQL database connection string
+    Default: postgresql://postgres:WlWXcf10suZlQZJYuhi@collegesafedatabase.clwecg6wi29u.ap-southeast-2.rds.amazonaws.com/collegesafe?sslmode=require
+
+Globals:
+  Function:
+    Timeout: 30
+    MemorySize: 512
+    Runtime: nodejs18.x
+    Environment:
+      Variables:
+        DATABASE_URL: !Ref DatabaseURL
+        NODE_ENV: production
+    Tracing: Active
+
+Resources:
+  # S3 Bucket for file uploads
+  UploadsBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub college-safe-${AWS::StackName}-uploads
+      CorsConfiguration:
+        CorsRules:
+          - AllowedHeaders:
+              - "*"
+            AllowedMethods:
+              - GET
+              - PUT
+              - POST
+              - DELETE
+            AllowedOrigins:
+              - "*"
+            MaxAge: 3000
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+
+  # SNS Topic for notifications
+  NotificationsTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: !Sub college-safe-${AWS::StackName}-notifications
+
+  # API Gateway
+  ApiGateway:
+    Type: AWS::Serverless::Api
+    Properties:
+      StageName: dev
+      Cors:
+        AllowMethods: "'*'"
+        AllowHeaders: "'*'"
+        AllowOrigin: "'*'"
+      TracingConfig:
+        TracingEnabled: true
+
+  # Lambda Functions
+  AuthFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub college-safe-${AWS::StackName}-auth
+      CodeUri: lambda/auth.js
+      Handler: index.handler
+      Events:
+        LoginApi:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ApiGateway
+            Path: /api/login
+            Method: post
+        SignupApi:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ApiGateway
+            Path: /api/signup
+            Method: post
+        LogoutApi:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ApiGateway
+            Path: /api/logout
+            Method: post
+        UserApi:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ApiGateway
+            Path: /api/auth/user
+            Method: get
+
+  UsersFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub college-safe-${AWS::StackName}-users
+      CodeUri: lambda/users.js
+      Handler: index.handler
+      Events:
+        GetUsersApi:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ApiGateway
+            Path: /api/users
+            Method: get
+        GetUsersByRoleApi:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ApiGateway
+            Path: /api/users/role/{role}
+            Method: get
+        UpdateUserRoleApi:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ApiGateway
+            Path: /api/users/{id}/role
+            Method: patch
+
+  ResourcesFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub college-safe-${AWS::StackName}-resources
+      CodeUri: lambda/resources.js
+      Handler: index.handler
+      Events:
+        GetResourcesApi:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ApiGateway
+            Path: /api/resources
+            Method: get
+        CreateResourceApi:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ApiGateway
+            Path: /api/resources
+            Method: post
+        GetResourceApi:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ApiGateway
+            Path: /api/resources/{id}
+            Method: get
+        UpdateResourceApi:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ApiGateway
+            Path: /api/resources/{id}
+            Method: patch
+        DeleteResourceApi:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ApiGateway
+            Path: /api/resources/{id}
+            Method: delete
+
+  SessionsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub college-safe-${AWS::StackName}-sessions
+      CodeUri: lambda/sessions.js
+      Handler: index.handler
+      Events:
+        CreateSessionApi:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ApiGateway
+            Path: /api/sessions
+            Method: post
+        GetStudentSessionsApi:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ApiGateway
+            Path: /api/sessions/student
+            Method: get
+        GetCounsellorSessionsApi:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ApiGateway
+            Path: /api/sessions/counsellor
+            Method: get
+        GetPendingSessionsApi:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ApiGateway
+            Path: /api/sessions/pending
+            Method: get
+        GetAllSessionsApi:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ApiGateway
+            Path: /api/sessions/all
+            Method: get
+        UpdateSessionApi:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ApiGateway
+            Path: /api/sessions/{id}
+            Method: patch
+
+  MessagesFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub college-safe-${AWS::StackName}-messages
+      CodeUri: lambda/messages.js
+      Handler: index.handler
+      Events:
+        CreateMessageApi:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ApiGateway
+            Path: /api/messages
+            Method: post
+        GetConversationsApi:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ApiGateway
+            Path: /api/messages/conversations
+            Method: get
+        GetMessagesApi:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ApiGateway
+            Path: /api/messages/{conversationId}
+            Method: get
+
+  UploadFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub college-safe-${AWS::StackName}-upload
+      CodeUri: lambda/upload.js
+      Handler: index.handler
+      Environment:
+        Variables:
+          UPLOADS_BUCKET: !Ref UploadsBucket
+          NOTIFICATIONS_TOPIC_ARN: !Ref NotificationsTopic
+      Policies:
+        - S3ReadPolicy:
+            BucketName: !Ref UploadsBucket
+        - S3WritePolicy:
+            BucketName: !Ref UploadsBucket
+        - SNSPublishMessagePolicy:
+            TopicName: !GetAtt NotificationsTopic.TopicName
+      Events:
+        UploadApi:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ApiGateway
+            Path: /api/upload
+            Method: post
+
+  # CloudWatch Dashboard
+  MonitoringDashboard:
+    Type: AWS::CloudWatch::Dashboard
+    Properties:
+      DashboardName: !Sub college-safe-${AWS::StackName}-monitoring
+      DashboardBody: !Sub |
+        {
+          "widgets": [
+            {
+              "type": "metric",
+              "x": 0,
+              "y": 0,
+              "width": 12,
+              "height": 6,
+              "properties": {
+                "metrics": [
+                  [ "AWS/Lambda", "Duration", "FunctionName", "${AuthFunction}" ],
+                  [ ".", ".", ".", "${UsersFunction}" ],
+                  [ ".", ".", ".", "${ResourcesFunction}" ],
+                  [ ".", ".", ".", "${SessionsFunction}" ],
+                  [ ".", ".", ".", "${MessagesFunction}" ],
+                  [ ".", ".", ".", "${UploadFunction}" ]
+                ],
+                "view": "timeSeries",
+                "stacked": false,
+                "region": "${AWS::Region}",
+                "title": "Lambda Function Duration",
+                "period": 300
+              }
+            },
+            {
+              "type": "metric",
+              "x": 12,
+              "y": 0,
+              "width": 12,
+              "height": 6,
+              "properties": {
+                "metrics": [
+                  [ "AWS/Lambda", "Invocations", "FunctionName", "${AuthFunction}" ],
+                  [ ".", ".", ".", "${UsersFunction}" ],
+                  [ ".", ".", ".", "${ResourcesFunction}" ],
+                  [ ".", ".", ".", "${SessionsFunction}" ],
+                  [ ".", ".", ".", "${MessagesFunction}" ],
+                  [ ".", ".", ".", "${UploadFunction}" ]
+                ],
+                "view": "timeSeries",
+                "stacked": false,
+                "region": "${AWS::Region}",
+                "title": "Lambda Function Invocations",
+                "period": 300
+              }
+            }
+          ]
+        }
+
+Outputs:
+  ApiGatewayUrl:
+    Description: API Gateway endpoint URL
+    Value: !Sub https://${ApiGateway}.execute-api.${AWS::Region}.amazonaws.com/dev
+    Export:
+      Name: !Sub ${AWS::StackName}-api-url
+
+  UploadsBucket:
+    Description: S3 bucket for uploads
+    Value: !Ref UploadsBucket
+    Export:
+      Name: !Sub ${AWS::StackName}-uploads-bucket
+
+  NotificationsTopic:
+    Description: SNS topic for notifications
+    Value: !Ref NotificationsTopic
+    Export:
+      Name: !Sub ${AWS::StackName}-notifications-topic
+
+  MonitoringDashboard:
+    Description: CloudWatch dashboard URL
+    Value: !Sub https://${AWS::Region}.console.aws.amazon.com/cloudwatch/home?region=${AWS::Region}#dashboards:name=${MonitoringDashboard}

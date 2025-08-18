@@ -1,0 +1,126 @@
+# CloudWatch Dashboard Configuration for College Safe Serverless
+# This file can be imported to create monitoring dashboards
+
+Resources:
+  CollegeSafeMonitoringDashboard:
+    Type: AWS::CloudWatch::Dashboard
+    Properties:
+      DashboardName: college-safe-serverless-monitoring
+      DashboardBody: !Sub |
+        {
+          "widgets": [
+            {
+              "type": "metric",
+              "x": 0,
+              "y": 0,
+              "width": 12,
+              "height": 6,
+              "properties": {
+                "metrics": [
+                  [ "AWS/Lambda", "Duration", "FunctionName", "${AWS::StackName}-auth" ],
+                  [ ".", ".", ".", "${AWS::StackName}-users" ],
+                  [ ".", ".", ".", "${AWS::StackName}-resources" ],
+                  [ ".", ".", ".", "${AWS::StackName}-sessions" ],
+                  [ ".", ".", ".", "${AWS::StackName}-messages" ],
+                  [ ".", ".", ".", "${AWS::StackName}-upload" ]
+                ],
+                "view": "timeSeries",
+                "stacked": false,
+                "region": "${AWS::Region}",
+                "title": "Lambda Function Duration",
+                "period": 300
+              }
+            },
+            {
+              "type": "metric",
+              "x": 12,
+              "y": 0,
+              "width": 12,
+              "height": 6,
+              "properties": {
+                "metrics": [
+                  [ "AWS/Lambda", "Invocations", "FunctionName", "${AWS::StackName}-auth" ],
+                  [ ".", ".", ".", "${AWS::StackName}-users" ],
+                  [ ".", ".", ".", "${AWS::StackName}-resources" ],
+                  [ ".", ".", ".", "${AWS::StackName}-sessions" ],
+                  [ ".", ".", ".", "${AWS::StackName}-messages" ],
+                  [ ".", ".", ".", "${AWS::StackName}-upload" ]
+                ],
+                "view": "timeSeries",
+                "stacked": false,
+                "region": "${AWS::Region}",
+                "title": "Lambda Function Invocations",
+                "period": 300
+              }
+            },
+            {
+              "type": "metric",
+              "x": 0,
+              "y": 6,
+              "width": 12,
+              "height": 6,
+              "properties": {
+                "metrics": [
+                  [ "AWS/Lambda", "Errors", "FunctionName", "${AWS::StackName}-auth" ],
+                  [ ".", ".", ".", "${AWS::StackName}-users" ],
+                  [ ".", ".", ".", "${AWS::StackName}-resources" ],
+                  [ ".", ".", ".", "${AWS::StackName}-sessions" ],
+                  [ ".", ".", ".", "${AWS::StackName}-messages" ],
+                  [ ".", ".", ".", "${AWS::StackName}-upload" ]
+                ],
+                "view": "timeSeries",
+                "stacked": false,
+                "region": "${AWS::Region}",
+                "title": "Lambda Function Errors",
+                "period": 300
+              }
+            },
+            {
+              "type": "metric",
+              "x": 12,
+              "y": 6,
+              "width": 12,
+              "height": 6,
+              "properties": {
+                "metrics": [
+                  [ "AWS/ApiGateway", "Count", "ApiName", "college-safe-serverless" ],
+                  [ ".", "Latency", ".", "." ],
+                  [ ".", "4XXError", ".", "." ],
+                  [ ".", "5XXError", ".", "." ]
+                ],
+                "view": "timeSeries",
+                "stacked": false,
+                "region": "${AWS::Region}",
+                "title": "API Gateway Metrics",
+                "period": 300
+              }
+            }
+          ]
+        }
+
+  # CloudWatch Alarms
+  HighErrorRateAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: college-safe-high-error-rate
+      AlarmDescription: High error rate detected in Lambda functions
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 10
+      ComparisonOperator: GreaterThanThreshold
+      
+  HighLatencyAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: college-safe-high-latency
+      AlarmDescription: High latency detected in API Gateway
+      MetricName: Latency
+      Namespace: AWS/ApiGateway
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 5000
+      ComparisonOperator: GreaterThanThreshold
